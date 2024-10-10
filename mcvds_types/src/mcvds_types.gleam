@@ -38,7 +38,6 @@ pub type Register {
   )
 }
 
-// NOTE: may contain also values
 pub type Bitfield {
   Bitfield(
     caption: String,
