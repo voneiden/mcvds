@@ -15,6 +15,7 @@ version = "1.0.0"
 [dependencies]
 gleam_stdlib = ">= 0.34.0 and < 2.0.0"
 lustre = ">= 4.5.1 and < 5.0.0"
+mcvds_types = { path = "../mcvds_types" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
