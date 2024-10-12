@@ -1,11 +1,33 @@
 import gleam/option.{type Option}
 
+pub type Atdf {
+  Atdf(devices: List(Device), modules: List(Module))
+}
+
 pub type Device {
-  Device(name: String)
+  Device(
+    architecture: String,
+    family: String,
+    name: String,
+    modules: List(ModuleReference),
+  )
+}
+
+pub type ModuleReference {
+  ModuleReference(id: String, name: String, instances: List(ModuleInstance))
 }
 
 pub type ModuleInstance {
-  ModuleInstance(module_id: String, module_name: String, instance_name: String)
+  ModuleInstance(name: String, register_groups: List(InstanceRegisterGroup))
+}
+
+pub type InstanceRegisterGroup {
+  InstanceRegisterGroup(
+    address_space: Option(String),
+    name: String,
+    name_in: Option(String),
+    offset: Int,
+  )
 }
 
 pub type Module {
@@ -29,7 +51,7 @@ pub type RegisterGroup {
 pub type Register {
   Register(
     caption: String,
-    initval: Int,
+    initval: Option(Int),
     name: String,
     offset: Int,
     rw: ReadWrite,
