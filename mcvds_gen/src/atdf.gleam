@@ -1,8 +1,10 @@
 import gleam/dict.{type Dict}
 import gleam/dynamic
 import gleam/io
+import gleam/json
 import gleam/list
 import gleam/result
+import gleam/string
 import htmgrrrl as h
 import mcvds_coders
 import mcvds_types
@@ -134,8 +136,23 @@ fn atdf_parser(state: ParserState, _, event: h.SaxEvent) {
 
 pub type AtdfParseError {
   FileError(simplifile.FileError)
+  NameError
   SaxError
   DecodeError(String, List(dynamic.DecodeError))
+}
+
+fn name_from_file(file_path: String) {
+  use file_name <- result.try(
+    file_path
+    |> string.split("/")
+    |> list.last,
+  )
+  use name <- result.try(
+    file_name
+    |> string.split(".")
+    |> list.first,
+  )
+  Ok(name)
 }
 
 pub fn parse_atdf(file_name: String) {
@@ -147,6 +164,10 @@ pub fn parse_atdf(file_name: String) {
     |> result.map_error(fn(_) { SaxError }),
   )
 
+  use name <- result.try(
+    name_from_file(file_name) |> result.map_error(fn(_) { NameError }),
+  )
+
   let modules =
     list.map(parser_state.modules, mcvds_coders.module_decoder())
     |> result.all()
@@ -155,8 +176,15 @@ pub fn parse_atdf(file_name: String) {
     |> result.all()
 
   case modules, devices {
-    Ok(modules), Ok(devices) -> Ok(mcvds_types.Atdf(devices, modules))
+    Ok(modules), Ok(devices) -> Ok(mcvds_types.Atdf(name, devices, modules))
     Error(error), _ -> Error(DecodeError("Modules", error))
     _, Error(error) -> Error(DecodeError("Devices", error))
   }
+}
+
+pub fn export_atdf(atdf: mcvds_types.Atdf) {
+  simplifile.write(
+    "../mcvds_ui/priv/static/defs/" <> atdf.name <> ".json",
+    mcvds_coders.atdf_encoder(atdf) |> json.to_string,
+  )
 }

@@ -1,8 +1,26 @@
 import gleam/dynamic.{any, field, int, list, optional, optional_field, string}
 import gleam/int as gleam_int
+import gleam/json as j
 import gleam/option
 import gleam/result
 import mcvds_types
+
+pub fn atdf_decoder() {
+  dynamic.decode3(
+    mcvds_types.Atdf,
+    field("name", string),
+    field("devices", list(device_decoder())),
+    field("modules", list(module_decoder())),
+  )
+}
+
+pub fn atdf_encoder(atdf: mcvds_types.Atdf) {
+  j.object([
+    #("name", j.string(atdf.name)),
+    #("devices", j.array(atdf.devices, device_encoder)),
+    #("modules", j.array(atdf.modules, module_encoder)),
+  ])
+}
 
 pub fn device_decoder() {
   dynamic.decode4(
@@ -14,6 +32,15 @@ pub fn device_decoder() {
   )
 }
 
+pub fn device_encoder(device: mcvds_types.Device) {
+  j.object([
+    #("architecture", j.string(device.architecture)),
+    #("family", j.string(device.family)),
+    #("name", j.string(device.name)),
+    #("modules", j.array(device.modules, module_reference_encoder)),
+  ])
+}
+
 pub fn module_reference_decoder() {
   dynamic.decode3(
     mcvds_types.ModuleReference,
@@ -23,12 +50,30 @@ pub fn module_reference_decoder() {
   )
 }
 
+pub fn module_reference_encoder(module_reference: mcvds_types.ModuleReference) {
+  j.object([
+    #("id", j.string(module_reference.id)),
+    #("name", j.string(module_reference.name)),
+    #("instances", j.array(module_reference.instances, module_instance_encoder)),
+  ])
+}
+
 pub fn module_instance_decoder() {
   dynamic.decode2(
     mcvds_types.ModuleInstance,
     field("name", string),
     optional_list_field("register_groups", instance_register_group_decoder),
   )
+}
+
+pub fn module_instance_encoder(module_reference: mcvds_types.ModuleInstance) {
+  j.object([
+    #("name", j.string(module_reference.name)),
+    #(
+      "register_groups",
+      j.array(module_reference.register_groups, instance_register_group_encoder),
+    ),
+  ])
 }
 
 pub fn instance_register_group_decoder() {
@@ -44,6 +89,20 @@ pub fn instance_register_group_decoder() {
   )
 }
 
+pub fn instance_register_group_encoder(
+  instance_register_group: mcvds_types.InstanceRegisterGroup,
+) {
+  j.object([
+    #(
+      "address_space",
+      j.nullable(instance_register_group.address_space, j.string),
+    ),
+    #("name", j.string(instance_register_group.name)),
+    #("name_in", j.nullable(instance_register_group.name_in, j.string)),
+    #("offset", hex_encoder(instance_register_group.offset)),
+  ])
+}
+
 pub fn module_decoder() {
   dynamic.decode4(
     mcvds_types.Module,
@@ -54,6 +113,18 @@ pub fn module_decoder() {
   )
 }
 
+pub fn module_encoder(module: mcvds_types.Module) {
+  j.object([
+    #("caption", j.string(module.caption)),
+    #("id", j.string(module.id)),
+    #("name", j.string(module.name)),
+    #(
+      "register_groups",
+      j.array(module.register_groups, register_group_encoder),
+    ),
+  ])
+}
+
 pub fn register_group_decoder() {
   dynamic.decode4(
     mcvds_types.RegisterGroup,
@@ -62,6 +133,15 @@ pub fn register_group_decoder() {
     field("size", hex_decoder),
     field("registers", list(register_decoder())),
   )
+}
+
+pub fn register_group_encoder(register_group: mcvds_types.RegisterGroup) {
+  j.object([
+    #("caption", j.string(register_group.caption)),
+    #("name", j.string(register_group.name)),
+    #("size", hex_encoder(register_group.size)),
+    #("registers", j.array(register_group.registers, register_encoder)),
+  ])
 }
 
 pub fn register_decoder() {
@@ -80,6 +160,18 @@ pub fn register_decoder() {
   )
 }
 
+pub fn register_encoder(register: mcvds_types.Register) {
+  j.object([
+    #("caption", j.string(register.caption)),
+    #("initval", j.nullable(register.initval, hex_encoder)),
+    #("name", j.string(register.name)),
+    #("offset", hex_encoder(register.offset)),
+    #("rw", read_write_encoder(register.rw)),
+    #("size", j.int(register.size)),
+    #("bitfields", j.array(register.bitfields, bitfield_encoder)),
+  ])
+}
+
 pub fn bitfield_decoder() {
   dynamic.decode5(
     mcvds_types.Bitfield,
@@ -91,6 +183,16 @@ pub fn bitfield_decoder() {
   )
 }
 
+pub fn bitfield_encoder(bitfield: mcvds_types.Bitfield) {
+  j.object([
+    #("caption", j.string(bitfield.caption)),
+    #("mask", hex_encoder(bitfield.mask)),
+    #("name", j.string(bitfield.name)),
+    #("rw", read_write_encoder(bitfield.rw)),
+    #("values", j.nullable(bitfield.values, j.string)),
+  ])
+}
+
 pub fn read_write_decoder(value: dynamic.Dynamic) {
   string(value)
   |> result.try(fn(value) {
@@ -100,6 +202,14 @@ pub fn read_write_decoder(value: dynamic.Dynamic) {
       "R" -> Ok(mcvds_types.Read)
       _ -> Error([dynamic.DecodeError("One of 'RW', 'W', 'R'", value, [])])
     }
+  })
+}
+
+pub fn read_write_encoder(value) {
+  j.string(case value {
+    mcvds_types.ReadWrite -> "RW"
+    mcvds_types.Write -> "W"
+    mcvds_types.Read -> "R"
   })
 }
 
@@ -118,6 +228,10 @@ pub fn hex_decoder(dynamic_value: dynamic.Dynamic) {
         ])
     }
   })
+}
+
+pub fn hex_encoder(value) {
+  j.string("0x" <> gleam_int.to_base16(value))
 }
 
 pub fn int_from_string_decoder(value: dynamic.Dynamic) {

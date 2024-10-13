@@ -1,7 +1,7 @@
 import gleam/option.{type Option}
 
 pub type Atdf {
-  Atdf(devices: List(Device), modules: List(Module))
+  Atdf(name: String, devices: List(Device), modules: List(Module))
 }
 
 pub type Device {
