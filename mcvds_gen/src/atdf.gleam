@@ -18,7 +18,10 @@ fn attrs_to_data(attrs: List(h.Attribute)) -> Dict(String, dynamic.Dynamic) {
 
 fn element_is_data(name: String) {
   list.contains(
-    ["device", "instance", "module", "register-group", "register", "bitfield"],
+    [
+      "device", "instance", "module", "register-group", "register", "bitfield",
+      "pinout", "pin",
+    ],
     name,
   )
 }
@@ -28,6 +31,7 @@ pub type ParserState {
     stack: List(Dict(String, dynamic.Dynamic)),
     modules: List(dynamic.Dynamic),
     devices: List(dynamic.Dynamic),
+    pinouts: List(dynamic.Dynamic),
     decode_errors: List(dynamic.DecodeError),
   )
 }
@@ -75,6 +79,7 @@ fn insert_to_parent(parent, name, child) {
     "register-group" -> "register_groups"
     "instance" -> "instances"
     "module" -> "modules"
+    "pin" -> "pins"
     _ -> {
       io.println("Unhandled name: '" <> name <> "'")
       panic
@@ -124,6 +129,12 @@ fn atdf_parser(state: ParserState, _, event: h.SaxEvent) {
                     stack: [],
                     devices: [dynamic.from(self), ..state.devices],
                   )
+                "pinout" ->
+                  ParserState(
+                    ..state,
+                    stack: [],
+                    pinouts: [dynamic.from(self), ..state.pinouts],
+                  )
                 _ -> panic
               }
             [] -> state
@@ -160,7 +171,7 @@ pub fn parse_atdf(file_name: String) {
     simplifile.read(from: file_name) |> result.map_error(FileError),
   )
   use parser_state <- result.try(
-    h.sax(xml, ParserState([], [], [], []), atdf_parser)
+    h.sax(xml, ParserState([], [], [], [], []), atdf_parser)
     |> result.map_error(fn(_) { SaxError }),
   )
 
@@ -174,11 +185,16 @@ pub fn parse_atdf(file_name: String) {
   let devices =
     list.map(parser_state.devices, mcvds_coders.device_decoder())
     |> result.all()
+  let pinouts =
+    list.map(parser_state.pinouts, mcvds_coders.pinout_decoder())
+    |> result.all()
 
-  case modules, devices {
-    Ok(modules), Ok(devices) -> Ok(mcvds_types.Atdf(name, devices, modules))
-    Error(error), _ -> Error(DecodeError("Modules", error))
-    _, Error(error) -> Error(DecodeError("Devices", error))
+  case modules, devices, pinouts {
+    Ok(modules), Ok(devices), Ok(pinouts) ->
+      Ok(mcvds_types.Atdf(name, devices, modules, pinouts))
+    Error(error), _, _ -> Error(DecodeError("Modules", error))
+    _, Error(error), _ -> Error(DecodeError("Devices", error))
+    _, _, Error(error) -> Error(DecodeError("Pinouts", error))
   }
 }
 

@@ -1,7 +1,12 @@
 import gleam/option.{type Option}
 
 pub type Atdf {
-  Atdf(name: String, devices: List(Device), modules: List(Module))
+  Atdf(
+    name: String,
+    devices: List(Device),
+    modules: List(Module),
+    pinouts: List(Pinout),
+  )
 }
 
 pub type Device {
@@ -74,4 +79,12 @@ pub type ReadWrite {
   ReadWrite
   Read
   Write
+}
+
+pub type Pinout {
+  Pinout(name: String, pins: List(Pin))
+}
+
+pub type Pin {
+  Pin(pad: String, position: Int)
 }

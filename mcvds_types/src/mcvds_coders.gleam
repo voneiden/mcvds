@@ -6,11 +6,12 @@ import gleam/result
 import mcvds_types
 
 pub fn atdf_decoder() {
-  dynamic.decode3(
+  dynamic.decode4(
     mcvds_types.Atdf,
     field("name", string),
     field("devices", list(device_decoder())),
     field("modules", list(module_decoder())),
+    field("pinouts", list(pinout_decoder())),
   )
 }
 
@@ -19,6 +20,7 @@ pub fn atdf_encoder(atdf: mcvds_types.Atdf) {
     #("name", j.string(atdf.name)),
     #("devices", j.array(atdf.devices, device_encoder)),
     #("modules", j.array(atdf.modules, module_encoder)),
+    #("pinouts", j.array(atdf.pinouts, pinout_encoder)),
   ])
 }
 
@@ -249,4 +251,31 @@ fn optional_list_field(field_name, field_decoder) {
     optional_field(field_name, list(field_decoder()))(value)
     |> result.map(option.unwrap(_, []))
   }
+}
+
+pub fn pinout_decoder() {
+  dynamic.decode2(
+    mcvds_types.Pinout,
+    field("name", string),
+    field("pins", list(pin_decoder())),
+  )
+}
+
+pub fn pinout_encoder(pinout: mcvds_types.Pinout) {
+  j.object([
+    #("name", j.string(pinout.name)),
+    #("pins", j.array(pinout.pins, pin_encoder)),
+  ])
+}
+
+pub fn pin_decoder() {
+  dynamic.decode2(
+    mcvds_types.Pin,
+    field("pad", string),
+    field("position", any([int, int_from_string_decoder])),
+  )
+}
+
+pub fn pin_encoder(pin: mcvds_types.Pin) {
+  j.object([#("pad", j.string(pin.pad)), #("position", j.int(pin.position))])
 }
