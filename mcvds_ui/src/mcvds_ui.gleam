@@ -21,8 +21,8 @@ type Msg {
 
 type Model {
   Model(
-    atdf: Option(mcvds_types.Atdf),
-    manifest: Option(mcvds_types.Manifest),
+    atdf: Option(Result(mcvds_types.Atdf, FetchOrDecodeError)),
+    manifest: Option(Result(mcvds_types.Manifest, FetchOrDecodeError)),
     error: Option(String),
   )
 }
@@ -46,19 +46,23 @@ fn init(_flags) {
   )
 }
 
-fn update(model, msg) {
+fn update(model: Model, msg: Msg) {
   let model = case msg {
-    ManifestResponse(Ok(manifest)) -> Model(..model, manifest: Some(manifest))
-    ManifestResponse(Error(error)) ->
-      Model(..model, error: Some(string.inspect(error)))
-    AtdfResponse(Ok(atdf)) -> Model(..model, atdf: Some(atdf))
-    AtdfResponse(Error(error)) ->
-      Model(..model, error: Some(string.inspect(error)))
+    ManifestResponse(manifest) -> Model(..model, manifest: Some(manifest))
+    AtdfResponse(atdf) -> Model(..model, atdf: Some(atdf))
   }
   #(model, effect.none())
 }
 
-fn view(model) {
+fn view(model: Model) {
+  case model.manifest {
+    Some(Ok(manifest)) -> main_view(model, manifest)
+    Some(Error(error)) -> text("Oh fok: " <> string.inspect(error))
+    None -> text("Hold up")
+  }
+}
+
+fn main_view(model: Model, manifest: mcvds_types.Manifest) {
   div([class("flex flex-col h-full")], [
     div([class("flex grow")], [
       div([class("w-60 bg-amber-700")], [text("sidebar")]),
