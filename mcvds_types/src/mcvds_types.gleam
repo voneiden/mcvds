@@ -88,3 +88,7 @@ pub type Pinout {
 pub type Pin {
   Pin(pad: String, position: Int)
 }
+
+pub type Manifest {
+  Manifest(atdfs: List(String))
+}

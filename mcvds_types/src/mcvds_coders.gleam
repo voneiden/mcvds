@@ -279,3 +279,7 @@ pub fn pin_decoder() {
 pub fn pin_encoder(pin: mcvds_types.Pin) {
   j.object([#("pad", j.string(pin.pad)), #("position", j.int(pin.position))])
 }
+
+pub fn manifest_decoder() {
+  dynamic.decode1(mcvds_types.Manifest, field("atdfs", list(string)))
+}
