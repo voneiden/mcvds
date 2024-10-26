@@ -256,16 +256,32 @@ fn optional_list_field(field_name, field_decoder) {
 pub fn pinout_decoder() {
   dynamic.decode2(
     mcvds_types.Pinout,
-    field("name", string),
+    field("name", package_decoder),
     field("pins", list(pin_decoder())),
   )
 }
 
 pub fn pinout_encoder(pinout: mcvds_types.Pinout) {
   j.object([
-    #("name", j.string(pinout.name)),
+    #("name", package_encoder(pinout.name)),
     #("pins", j.array(pinout.pins, pin_encoder)),
   ])
+}
+
+pub fn package_decoder(value: dynamic.Dynamic) {
+  string(value)
+  |> result.try(fn(value) {
+    case value {
+      "SOIC14" -> Ok(mcvds_types.SOIC14)
+      _ -> Error([dynamic.DecodeError("Unknown package", value, [])])
+    }
+  })
+}
+
+pub fn package_encoder(package: mcvds_types.Package) {
+  j.string(case package {
+    mcvds_types.SOIC14 -> "SOIC14"
+  })
 }
 
 pub fn pin_decoder() {

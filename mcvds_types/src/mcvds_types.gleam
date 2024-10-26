@@ -82,7 +82,11 @@ pub type ReadWrite {
 }
 
 pub type Pinout {
-  Pinout(name: String, pins: List(Pin))
+  Pinout(name: Package, pins: List(Pin))
+}
+
+pub type Package {
+  SOIC14
 }
 
 pub type Pin {
