@@ -51,13 +51,13 @@ pub fn first_replace(l: List(a), replace_fn: fn(a) -> Result(a, Nil)) {
 }
 
 //fn insert_in_field(data: List(#(String, String)), 
-fn prepend_to_dynamic_list(
+fn append_to_dynamic_list(
   dynamic_list: dynamic.Dynamic,
   dynamic_value: dynamic.Dynamic,
 ) {
   dynamic_list
   |> dynamic.list(dynamic.dynamic)
-  |> result.map(fn(l) { l |> list.prepend(dynamic_value) |> dynamic.from })
+  |> result.map(fn(l) { l |> list.append([dynamic_value]) |> dynamic.from })
 }
 
 fn prepend_dynamic_value_to_key(
@@ -68,7 +68,7 @@ fn prepend_dynamic_value_to_key(
   map
   |> dict.get(key)
   |> result.unwrap(dynamic.from([]))
-  |> prepend_to_dynamic_list(value)
+  |> append_to_dynamic_list(value)
   |> result.try(fn(new_value) { Ok(dict.insert(map, key, new_value)) })
 }
 
