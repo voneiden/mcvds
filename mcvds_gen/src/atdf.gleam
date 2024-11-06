@@ -20,7 +20,7 @@ fn element_is_data(name: String) {
   list.contains(
     [
       "device", "instance", "module", "register-group", "register", "bitfield",
-      "pinout", "pin",
+      "pinout", "pin", "signal",
     ],
     name,
   )
@@ -80,6 +80,7 @@ fn insert_to_parent(parent, name, child) {
     "instance" -> "instances"
     "module" -> "modules"
     "pin" -> "pins"
+    "signal" -> "signals"
     _ -> {
       io.println("Unhandled name: '" <> name <> "'")
       panic

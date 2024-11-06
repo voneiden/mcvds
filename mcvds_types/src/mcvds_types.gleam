@@ -23,7 +23,21 @@ pub type ModuleReference {
 }
 
 pub type ModuleInstance {
-  ModuleInstance(name: String, register_groups: List(InstanceRegisterGroup))
+  ModuleInstance(
+    name: String,
+    register_groups: List(InstanceRegisterGroup),
+    signals: List(Signal),
+  )
+}
+
+pub type Signal {
+  Signal(
+    field: Option(String),
+    function: String,
+    group: String,
+    index: Option(Int),
+    pad: String,
+  )
 }
 
 pub type InstanceRegisterGroup {

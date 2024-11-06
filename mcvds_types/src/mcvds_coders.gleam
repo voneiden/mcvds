@@ -61,10 +61,11 @@ pub fn module_reference_encoder(module_reference: mcvds_types.ModuleReference) {
 }
 
 pub fn module_instance_decoder() {
-  dynamic.decode2(
+  dynamic.decode3(
     mcvds_types.ModuleInstance,
     field("name", string),
     optional_list_field("register_groups", instance_register_group_decoder),
+    optional_list_field("signals", instance_signal_decoder),
   )
 }
 
@@ -75,6 +76,7 @@ pub fn module_instance_encoder(module_reference: mcvds_types.ModuleInstance) {
       "register_groups",
       j.array(module_reference.register_groups, instance_register_group_encoder),
     ),
+    #("signals", j.array(module_reference.signals, instance_signal_encoder)),
   ])
 }
 
@@ -102,6 +104,27 @@ pub fn instance_register_group_encoder(
     #("name", j.string(instance_register_group.name)),
     #("name_in", j.nullable(instance_register_group.name_in, j.string)),
     #("offset", hex_encoder(instance_register_group.offset)),
+  ])
+}
+
+pub fn instance_signal_decoder() {
+  dynamic.decode5(
+    mcvds_types.Signal,
+    optional_field("field", string),
+    field("function", string),
+    field("group", string),
+    optional_field("index", any([int, int_from_string_decoder])),
+    field("pad", string),
+  )
+}
+
+pub fn instance_signal_encoder(signal: mcvds_types.Signal) {
+  j.object([
+    #("field", j.nullable(signal.field, j.string)),
+    #("function", j.string(signal.function)),
+    #("group", j.string(signal.group)),
+    #("index", j.nullable(signal.index, j.int)),
+    #("pad", j.string(signal.pad)),
   ])
 }
 
