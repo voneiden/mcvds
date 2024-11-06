@@ -100,6 +100,7 @@ pub type Pinout {
 }
 
 pub type Package {
+  SOIC8
   SOIC14
 }
 

@@ -295,6 +295,7 @@ pub fn package_decoder(value: dynamic.Dynamic) {
   string(value)
   |> result.try(fn(value) {
     case value {
+      "SOIC8" -> Ok(mcvds_types.SOIC8)
       "SOIC14" -> Ok(mcvds_types.SOIC14)
       _ -> Error([dynamic.DecodeError("Unknown package", value, [])])
     }
@@ -303,6 +304,7 @@ pub fn package_decoder(value: dynamic.Dynamic) {
 
 pub fn package_encoder(package: mcvds_types.Package) {
   j.string(case package {
+    mcvds_types.SOIC8 -> "SOIC8"
     mcvds_types.SOIC14 -> "SOIC14"
   })
 }
