@@ -110,10 +110,13 @@ pub fn instance_register_group_encoder(
 pub fn instance_signal_decoder() {
   dynamic.decode5(
     mcvds_types.Signal,
-    optional_field("field", string),
+    any([optional_field("field", string), field("field", optional(string))]),
     field("function", string),
     field("group", string),
-    optional_field("index", any([int, int_from_string_decoder])),
+    any([
+      optional_field("index", int_from_string_decoder),
+      field("index", optional(int)),
+    ]),
     field("pad", string),
   )
 }
