@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/dynamic
 import gleam/fetch
 import gleam/http/request
@@ -64,8 +65,8 @@ fn update(model: Model, msg: Msg) {
     AtdfResponse(atdf_response) ->
       case atdf_response {
         Ok(atdf) ->
-      Model(
-        ..model,
+          Model(
+            ..model,
             atdf: Some(atdf_response),
             device: use_option_if_in_list_else_first(atdf.devices, model.device),
             pinout: use_option_if_in_list_else_first(atdf.pinouts, model.pinout),
@@ -136,21 +137,28 @@ fn soic_height(pinout: mcvds_types.Pinout) {
   })
 }
 
-fn view_pin_row() {
-  todo
+fn pins_to_soic_layout(pins: List(mcvds_types.Pin)) {
+  let row_count = list.length(pins) / 2
+  case list.split(pins, row_count) {
+    #(left, right) -> #(left, right |> list.reverse)
+  }
 }
 
-fn soic_left_pins(pins: List(mcvds_types.Pin)) {
-  list.take(pins, list.length(pins) / 2)
+fn signals_to_soic_layout(
+  signals: List(mcvds_types.Signal),
+  left: List(mcvds_types.Pin),
+) {
+  let left_pads = list.map(left, fn(pin) { pin.pad })
+  list.partition(signals, fn(signal) { list.contains(left_pads, signal.pad) })
 }
 
-fn soic_right_pins(pins: List(mcvds_types.Pin)) {
-  let count = list.length(pins) / 2
-  list.drop(pins, count) |> list.take(count) |> list.reverse
-}
-
-fn view_pin(pin: mcvds_types.Pin, justify: String, pin_rounding: String) {
-  div([class("[&:not(:last-child)]:mb-2.5 h-6 flex"), class(justify)], [
+fn view_pin(
+  pin: mcvds_types.Pin,
+  signals: List(mcvds_types.Signal),
+  row_class: String,
+  pin_rounding: String,
+) {
+  div([class("[&:not(:last-child)]:mb-2.5 h-6 flex"), class(row_class)], [
     div(
       [
         class("flex justify-center items-center text-xs w-6 bg-slate-300"),
@@ -158,24 +166,42 @@ fn view_pin(pin: mcvds_types.Pin, justify: String, pin_rounding: String) {
       ],
       [text(int.to_string(pin.position))],
     ),
+    ..view_signals(pin, signals)
   ])
 }
 
-fn view_soic_left_pins(pins: List(mcvds_types.Pin)) {
+fn view_signals(pin: mcvds_types.Pin, signals: List(mcvds_types.Signal)) {
+  case signals {
+    [] -> [
+      div(
+        [
+          class(
+            "text-xs border rounded w-14 flex justify-center items-center mx-1",
+          ),
+        ],
+        [text(pin.pad)],
+      ),
+    ]
+    _ -> list.map(signals, view_signal)
+  }
+}
+
+fn view_signal(signal: mcvds_types.Signal) {
   div(
-    [],
-    list.map(soic_left_pins(pins), view_pin(_, "justify-end", "rounded-l-md")),
+    [class("text-xs border rounded w-14 flex justify-center items-center mx-1")],
+    [text(signal_label(signal))],
   )
 }
 
-fn view_soic_right_pins(pins: List(mcvds_types.Pin)) {
-  div(
-    [],
-    list.map(soic_right_pins(pins), view_pin(_, "justify-start", "rounded-r-md")),
-  )
+fn signal_label(signal: mcvds_types.Signal) {
+  case signal.function, signal.group {
+    "IOPORT", _ -> signal.pad
+    _, "OUT" -> signal.function <> " " <> "OUT"
+    _, _ ->
+      signal.group
+      <> { signal.index |> option.map(int.to_string(_)) |> option.unwrap("") }
+  }
 }
-
-// TODO your pinout seems to be still reversed! mvcds_gen probably needs to do something about it 
 
 /// DIP / SOIC package is dual in-line, so we can render just left and right side
 fn view_soic(
@@ -183,6 +209,16 @@ fn view_soic(
   device: mcvds_types.Device,
   pinout: mcvds_types.Pinout,
 ) {
+  let #(left_pins, right_pins) = pins_to_soic_layout(pinout.pins)
+  let signals =
+    device.modules
+    |> list.map(fn(m) { m.instances })
+    |> list.concat
+    |> list.map(fn(i) { i.signals })
+    |> list.concat
+  let #(left_signals, right_signals) =
+    signals_to_soic_layout(signals, left_pins)
+  let signal_map = list.group(signals, fn(s) { s.pad })
   div(
     [
       id("soic"),
@@ -190,9 +226,17 @@ fn view_soic(
       a.style([#("height", soic_height(pinout))]),
     ],
     [
-      div([id("soic-left"), class("grow bg-sky-700")], [
-        view_soic_left_pins(pinout.pins),
-      ]),
+      div(
+        [id("soic-left"), class("grow bg-sky-700")],
+        list.map(left_pins, fn(pin) {
+          view_pin(
+            pin,
+            dict.get(signal_map, pin.pad) |> result.unwrap([]),
+            "justify-start flex-row-reverse",
+            "rounded-l-md",
+          )
+        }),
+      ),
       div([id("soic-middle"), class("flex flex-col w-24 bg-sky-600")], [
         div(
           [
@@ -210,9 +254,17 @@ fn view_soic(
           [text(atdf.name)],
         ),
       ]),
-      div([id("soic-right"), class("grow bg-sky-500")], [
-        view_soic_right_pins(pinout.pins),
-      ]),
+      div(
+        [id("soic-right"), class("grow bg-sky-500")],
+        list.map(right_pins, fn(pin) {
+          view_pin(
+            pin,
+            dict.get(signal_map, pin.pad) |> result.unwrap([]),
+            "justify-start",
+            "rounded-r-md",
+          )
+        }),
+      ),
     ],
   )
 }
