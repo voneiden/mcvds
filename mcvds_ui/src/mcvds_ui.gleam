@@ -50,32 +50,28 @@ fn init(_flags) {
   )
 }
 
-/// Used for updating the value of selected pinout when Atdf changes
-/// Will use the previous selection if it is still valid, otherwise
-/// uses the first pinout definition in Atdf 
 @internal
-pub fn set_pinout_for_atdf(
-  atdf: mcvds_types.Atdf,
-  previous_pinout_option: Option(mcvds_types.Pinout),
-) {
-  case option.map(previous_pinout_option, list.contains(atdf.pinouts, _)) {
-    Some(True) -> previous_pinout_option
-    _ -> list.first(atdf.pinouts) |> option.from_result
+pub fn use_option_if_in_list_else_first(l: List(a), opt: Option(a)) {
+  case option.map(opt, list.contains(l, _)) {
+    Some(True) -> opt
+    _ -> list.first(l) |> option.from_result
   }
 }
 
 fn update(model: Model, msg: Msg) {
   let model = case msg {
     ManifestResponse(manifest) -> Model(..model, manifest: Some(manifest))
-    AtdfResponse(atdf) ->
+    AtdfResponse(atdf_response) ->
+      case atdf_response {
+        Ok(atdf) ->
       Model(
         ..model,
-        atdf: Some(atdf),
-        pinout: case atdf {
-          Ok(atdf) -> set_pinout_for_atdf(atdf, model.pinout)
-          _ -> None
-        },
-      )
+            atdf: Some(atdf_response),
+            device: use_option_if_in_list_else_first(atdf.devices, model.device),
+            pinout: use_option_if_in_list_else_first(atdf.pinouts, model.pinout),
+          )
+        Error(_) -> Model(..model, atdf: Some(atdf_response))
+      }
   }
   #(model, effect.none())
 }

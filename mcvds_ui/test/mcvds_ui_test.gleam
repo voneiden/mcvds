@@ -17,14 +17,29 @@ pub fn set_pinout_for_atdf_test() {
   let atdf_with_both =
     mcvds_types.Atdf("", [], [], [pinout_soic8, pinout_soic14])
   [
-    mcvds_ui.set_pinout_for_atdf(atdf_without_pinouts, None),
-    mcvds_ui.set_pinout_for_atdf(atdf_without_pinouts, Some(pinout_soic14)),
-    mcvds_ui.set_pinout_for_atdf(atdf_with_soic8, None),
-    mcvds_ui.set_pinout_for_atdf(atdf_with_soic8, Some(pinout_soic14)),
-    mcvds_ui.set_pinout_for_atdf(atdf_with_soic14, None),
-    mcvds_ui.set_pinout_for_atdf(atdf_with_soic14, Some(pinout_soic14)),
-    mcvds_ui.set_pinout_for_atdf(atdf_with_both, None),
-    mcvds_ui.set_pinout_for_atdf(atdf_with_both, Some(pinout_soic14)),
+    mcvds_ui.use_option_if_in_list_else_first(
+      atdf_without_pinouts.pinouts,
+      None,
+    ),
+    mcvds_ui.use_option_if_in_list_else_first(
+      atdf_without_pinouts.pinouts,
+      Some(pinout_soic14),
+    ),
+    mcvds_ui.use_option_if_in_list_else_first(atdf_with_soic8.pinouts, None),
+    mcvds_ui.use_option_if_in_list_else_first(
+      atdf_with_soic8.pinouts,
+      Some(pinout_soic14),
+    ),
+    mcvds_ui.use_option_if_in_list_else_first(atdf_with_soic14.pinouts, None),
+    mcvds_ui.use_option_if_in_list_else_first(
+      atdf_with_soic14.pinouts,
+      Some(pinout_soic14),
+    ),
+    mcvds_ui.use_option_if_in_list_else_first(atdf_with_both.pinouts, None),
+    mcvds_ui.use_option_if_in_list_else_first(
+      atdf_with_both.pinouts,
+      Some(pinout_soic14),
+    ),
   ]
   |> should.equal([
     None,
