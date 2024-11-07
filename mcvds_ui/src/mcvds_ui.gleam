@@ -26,6 +26,7 @@ type Model {
     atdf: Option(Result(mcvds_types.Atdf, FetchOrDecodeError)),
     manifest: Option(Result(mcvds_types.Manifest, FetchOrDecodeError)),
     error: Option(String),
+    device: Option(mcvds_types.Device),
     pinout: Option(mcvds_types.Pinout),
   )
 }
@@ -44,7 +45,7 @@ pub fn main() {
 
 fn init(_flags) {
   #(
-    Model(atdf: None, manifest: None, error: None, pinout: None),
+    Model(atdf: None, manifest: None, error: None, device: None, pinout: None),
     effect.batch([get_manifest(), get_atdf("ATtiny814.json")]),
   )
 }
@@ -92,7 +93,7 @@ fn main_view(model: Model, manifest: mcvds_types.Manifest) {
     div([class("flex grow")], [
       div([id("sidebar"), class("w-60 bg-amber-700")], [text("sidebar")]),
       div([id("chip"), class("flex grow bg-cyan-500")], [
-        view_chip(model.atdf, model.pinout),
+        view_chip(model.atdf, model.device, model.pinout),
       ]),
     ]),
     div([class("flex grow")], [
@@ -106,13 +107,16 @@ fn main_view(model: Model, manifest: mcvds_types.Manifest) {
 
 fn view_chip(
   atdf: Option(Result(mcvds_types.Atdf, FetchOrDecodeError)),
+  device: Option(mcvds_types.Device),
   pinout: Option(mcvds_types.Pinout),
 ) {
-  case atdf, pinout {
-    Some(Error(error)), _ -> text(string.inspect(error))
-    None, _ -> text("no chip")
-    _, None -> text("no pinout")
-    Some(Ok(atdf)), Some(pinout) -> view_soic(atdf, pinout)
+  case atdf, device, pinout {
+    Some(Error(error)), _, _ -> text(string.inspect(error))
+    None, _, _ -> text("no chip")
+    _, None, _ -> text("no device")
+    _, _, None -> text("no pinout")
+    Some(Ok(atdf)), Some(device), Some(pinout) ->
+      view_soic(atdf, device, pinout)
   }
 }
 
@@ -178,7 +182,11 @@ fn view_soic_right_pins(pins: List(mcvds_types.Pin)) {
 // TODO your pinout seems to be still reversed! mvcds_gen probably needs to do something about it 
 
 /// DIP / SOIC package is dual in-line, so we can render just left and right side
-fn view_soic(atdf: mcvds_types.Atdf, pinout: mcvds_types.Pinout) {
+fn view_soic(
+  atdf: mcvds_types.Atdf,
+  device: mcvds_types.Device,
+  pinout: mcvds_types.Pinout,
+) {
   div(
     [
       id("soic"),
