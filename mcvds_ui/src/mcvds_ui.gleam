@@ -3,10 +3,12 @@ import gleam/dynamic
 import gleam/fetch
 import gleam/http/request
 import gleam/int
+import gleam/io
 import gleam/javascript/promise
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/set.{type Set}
 import gleam/string
 import js/utils
 import lustre
@@ -193,6 +195,10 @@ fn view_signal(signal: mcvds_types.Signal) {
   )
 }
 
+/// For labeling the signal we normally use group + index
+/// For IOPORT function the group is PIN, so use the pad 
+///   name as it is more familiar, eg "PA4"
+/// For OUT group use function name, eg "DAC0 OUT"
 fn signal_label(signal: mcvds_types.Signal) {
   case signal.function, signal.group {
     "IOPORT", _ -> signal.pad
@@ -201,6 +207,109 @@ fn signal_label(signal: mcvds_types.Signal) {
       signal.group
       <> { signal.index |> option.map(int.to_string(_)) |> option.unwrap("") }
   }
+}
+
+/// Signal ordering is done as follows
+/// 1) Group by function
+/// 2) Sort groups by member size
+/// 3) Setup fit round
+/// 4) Fit Forced groups
+/// 5) Fit groups
+/// 6) If more to fit
+fn group_and_order_signals(
+  signals: List(mcvds_types.Signal),
+) -> List(List(mcvds_types.Signal)) {
+  signals
+  |> list.group(fn(s) { s.function })
+  |> dict.values()
+  |> list.sort(fn(a, b) { int.compare(list.length(a), list.length(b)) })
+  |> list.reverse
+  // FIXME same pad must never be twice in the same group
+}
+
+fn split_duplicate_pads(
+  signals: List(mcvds_types.Signal),
+) -> List(List(mcvds_types.Signal)) {
+  todo
+}
+
+fn fit_signal_group(
+  signal_group: List(mcvds_types.Signal),
+  available_pads: Set(String),
+) {
+  let signal_pads = signal_group |> list.map(fn(s) { s.pad }) |> set.from_list
+  case set.is_subset(signal_pads, available_pads) {
+    True -> Ok(#(signal_group, set.difference(available_pads, signal_pads)))
+    False -> Error(Nil)
+  }
+}
+
+fn do_fit_signal_groups(
+  signal_groups: List(List(mcvds_types.Signal)),
+  pads: Set(String),
+  available_pads: Set(String),
+) {
+  case signal_groups {
+    [] -> []
+    _ ->
+      case list.pop_map(signal_groups, fit_signal_group(_, available_pads)) {
+        Ok(#(
+          #(fitted_signal_group, available_pads_after_fit),
+          remaining_signal_groups,
+        )) -> {
+          [
+            fitted_signal_group,
+            ..do_fit_signal_groups(
+              remaining_signal_groups,
+              pads,
+              available_pads_after_fit,
+            )
+          ]
+        }
+        Error(_) ->
+          case pads == available_pads {
+            True -> {
+              io.println_error("Fitting has failed, giving up!")
+              signal_groups
+            }
+            // TODO insert blanks
+            False -> {
+              io.println(
+                "Add blanks: "
+                <> int.to_string(set.size(available_pads))
+                <> "-"
+                <> int.to_string(list.length(signal_groups)),
+              )
+
+              //do_fit_signal_groups(signal_groups, pads, pads)
+              [
+                available_pads
+                  |> set.to_list
+                  |> list.map(fn(pad) {
+                    mcvds_types.Signal(
+                      None,
+                      "BLANK",
+                      "BLANK"
+                        <> int.to_string(set.size(available_pads))
+                        <> "-"
+                        <> int.to_string(list.length(signal_groups)),
+                      None,
+                      pad,
+                    )
+                  }),
+                ..do_fit_signal_groups(signal_groups, pads, pads)
+              ]
+            }
+          }
+      }
+  }
+}
+
+fn fit_signal_groups(
+  signal_groups: List(List(mcvds_types.Signal)),
+  pads: Set(String),
+) {
+  do_fit_signal_groups(signal_groups, pads, pads)
 }
 
 /// DIP / SOIC package is dual in-line, so we can render just left and right side
@@ -216,9 +325,17 @@ fn view_soic(
     |> list.concat
     |> list.map(fn(i) { i.signals })
     |> list.concat
-  let #(left_signals, right_signals) =
-    signals_to_soic_layout(signals, left_pins)
-  let signal_map = list.group(signals, fn(s) { s.pad })
+
+  let signal_pads = signals |> list.map(fn(s) { s.pad }) |> set.from_list
+
+  // Note: group reverses signal order
+  let signal_map =
+    signals
+    |> group_and_order_signals
+    |> fit_signal_groups(signal_pads)
+    |> list.concat
+    |> list.group(fn(s) { s.pad })
+
   div(
     [
       id("soic"),
@@ -231,7 +348,7 @@ fn view_soic(
         list.map(left_pins, fn(pin) {
           view_pin(
             pin,
-            dict.get(signal_map, pin.pad) |> result.unwrap([]),
+            dict.get(signal_map, pin.pad) |> result.unwrap([]) |> list.reverse,
             "justify-start flex-row-reverse",
             "rounded-l-md",
           )
@@ -259,7 +376,7 @@ fn view_soic(
         list.map(right_pins, fn(pin) {
           view_pin(
             pin,
-            dict.get(signal_map, pin.pad) |> result.unwrap([]),
+            dict.get(signal_map, pin.pad) |> result.unwrap([]) |> list.reverse,
             "justify-start",
             "rounded-r-md",
           )
