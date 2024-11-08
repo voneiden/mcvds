@@ -90,14 +90,25 @@ fn view(model: Model) {
 fn main_view(model: Model, manifest: mcvds_types.Manifest) {
   div([class("flex flex-col h-full")], [
     div([class("flex grow")], [
-      div([id("sidebar"), class("w-60 bg-amber-700")], [text("sidebar")]),
-      div([id("chip"), class("flex grow bg-cyan-500")], [
-        view_chip(model.atdf, model.device, model.pinout),
-      ]),
+      div([id("sidebar"), class("w-60 border bg-sky-900")], [text("sidebar")]),
+      div(
+        [
+          id("chip"),
+          class("flex grow bg-sky-950"),
+          a.style([
+            #(
+              "background-image",
+              "radial-gradient(#000000 1px,transparent 1px)",
+            ),
+            #("background-size", "10px 10px"),
+          ]),
+        ],
+        [view_chip(model.atdf, model.device, model.pinout)],
+      ),
     ]),
     div([class("flex grow")], [
-      div([id("registers"), class("grow bg-pink-200")], [text("reg view")]),
-      div([id("documentation"), class("grow bg-fuchsia-600")], [
+      div([id("registers"), class("grow border bg-sky-900")], [text("reg view")]),
+      div([id("documentation"), class("grow border bg-sky-900")], [
         text("doc view"),
       ]),
     ]),
@@ -174,25 +185,33 @@ fn view_pin(
 
 fn view_signals(pin: mcvds_types.Pin, signals: List(mcvds_types.Signal)) {
   case signals {
-    [] -> [
-      div(
-        [
-          class(
-            "text-xs border rounded w-14 flex justify-center items-center mx-1",
-          ),
-        ],
-        [text(pin.pad)],
-      ),
-    ]
+    [] -> [do_view_signal(pin.pad, pin.pad)]
     _ -> list.map(signals, view_signal)
   }
 }
 
-fn view_signal(signal: mcvds_types.Signal) {
+import utils/signal
+
+fn do_view_signal(label: String, function: String) {
+  let signal_bg_color = signal.background(function)
+  let signal_border = case label {
+    "" -> ""
+    _ -> "border "
+  }
   div(
-    [class("text-xs border rounded w-14 flex justify-center items-center mx-1")],
-    [text(signal_label(signal))],
+    [
+      class(
+        "text-xs rounded w-14 flex justify-center items-center mx-1 "
+        <> signal_border
+        <> signal_bg_color,
+      ),
+    ],
+    [text(label)],
   )
+}
+
+fn view_signal(signal: mcvds_types.Signal) {
+  do_view_signal(signal_label(signal), signal.function)
 }
 
 /// For labeling the signal we normally use group + index
@@ -296,16 +315,7 @@ fn do_fit_signal_groups(
                 available_pads
                   |> set.to_list
                   |> list.map(fn(pad) {
-                    mcvds_types.Signal(
-                      None,
-                      "BLANK",
-                      "BLANK"
-                        <> int.to_string(set.size(available_pads))
-                        <> "-"
-                        <> int.to_string(list.length(signal_groups)),
-                      None,
-                      pad,
-                    )
+                    mcvds_types.Signal(None, "BLANK", "", None, pad)
                   }),
                 ..do_fit_signal_groups(signal_groups, pads, pads)
               ]
@@ -349,12 +359,12 @@ fn view_soic(
   div(
     [
       id("soic"),
-      class("flex grow self-center bg-sky-800"),
+      class("flex grow self-center"),
       a.style([#("height", soic_height(pinout))]),
     ],
     [
       div(
-        [id("soic-left"), class("grow bg-sky-700")],
+        [id("soic-left"), class("grow")],
         list.map(left_pins, fn(pin) {
           view_pin(
             pin,
@@ -364,7 +374,7 @@ fn view_soic(
           )
         }),
       ),
-      div([id("soic-middle"), class("flex flex-col w-24 bg-sky-600")], [
+      div([id("soic-middle"), class("flex flex-col w-24")], [
         div(
           [
             id("pin1-marker"),
@@ -375,14 +385,16 @@ fn view_soic(
         div(
           [
             id("device-name"),
-            class("flex grow justify-center items-center"),
+            class(
+              "flex grow justify-center items-center text-white bg-zinc-800",
+            ),
             a.style([#("writing-mode", "vertical-rl")]),
           ],
           [text(atdf.name)],
         ),
       ]),
       div(
-        [id("soic-right"), class("grow bg-sky-500")],
+        [id("soic-right"), class("grow")],
         list.map(right_pins, fn(pin) {
           view_pin(
             pin,
