@@ -209,13 +209,6 @@ fn signal_label(signal: mcvds_types.Signal) {
   }
 }
 
-/// Signal ordering is done as follows
-/// 1) Group by function
-/// 2) Sort groups by member size
-/// 3) Setup fit round
-/// 4) Fit Forced groups
-/// 5) Fit groups
-/// 6) If more to fit
 fn group_and_order_signals(
   signals: List(mcvds_types.Signal),
 ) -> List(List(mcvds_types.Signal)) {
@@ -225,9 +218,12 @@ fn group_and_order_signals(
   |> list.flat_map(split_duplicate_pads)
   |> list.sort(fn(a, b) { int.compare(list.length(a), list.length(b)) })
   |> list.reverse
-  // FIXME same pad must never be twice in the same group
 }
 
+/// In special cases a function group may contain signals on the same pad.
+/// In the case of ATtiny814, the UPDI and RESET signals are on OTHERS function.
+/// In these situations the signals need to be split into separate signal groups
+/// to avoid blank insertions causing a misalignment
 fn split_duplicate_pads(
   signal_group: List(mcvds_types.Signal),
 ) -> List(List(mcvds_types.Signal)) {
