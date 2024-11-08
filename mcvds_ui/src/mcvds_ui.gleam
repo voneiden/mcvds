@@ -222,15 +222,29 @@ fn group_and_order_signals(
   signals
   |> list.group(fn(s) { s.function })
   |> dict.values()
+  |> list.flat_map(split_duplicate_pads)
   |> list.sort(fn(a, b) { int.compare(list.length(a), list.length(b)) })
   |> list.reverse
   // FIXME same pad must never be twice in the same group
 }
 
 fn split_duplicate_pads(
-  signals: List(mcvds_types.Signal),
+  signal_group: List(mcvds_types.Signal),
 ) -> List(List(mcvds_types.Signal)) {
-  todo
+  let #(main_group, other_groups) =
+    signal_group
+    |> list.group(fn(s) { s.pad })
+    |> dict.values()
+    |> list.fold(#([], []), fn(acc, signal) {
+      case signal {
+        [] -> acc
+        [first, ..rest_of_same_pad] -> #(
+          [first, ..acc.0],
+          list.prepend(acc.1, rest_of_same_pad),
+        )
+      }
+    })
+  [main_group |> list.reverse(), ..other_groups |> list.reverse()]
 }
 
 fn fit_signal_group(
