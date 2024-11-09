@@ -17,7 +17,7 @@ import lustre/effect
 import lustre/element.{text}
 import lustre/element/html.{div}
 import mcvds_coders
-import mcvds_types
+import utils/signal
 
 type Msg {
   ManifestResponse(Result(mcvds_types.Manifest, FetchOrDecodeError))
@@ -189,8 +189,6 @@ fn view_signals(pin: mcvds_types.Pin, signals: List(mcvds_types.Signal)) {
     _ -> list.map(signals, view_signal)
   }
 }
-
-import utils/signal
 
 fn do_view_signal(label: String, function: String) {
   let signal_bg_color = signal.background(function)
