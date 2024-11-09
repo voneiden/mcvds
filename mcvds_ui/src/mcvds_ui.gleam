@@ -19,6 +19,7 @@ import lustre/effect
 import lustre/element.{text}
 import lustre/element/html.{div}
 import mcvds_coders
+import mcvds_types as t
 import utils/signal
 
 type Msg {
@@ -28,11 +29,11 @@ type Msg {
 
 type Model {
   Model(
-    atdf: Option(Result(mcvds_types.Atdf, FetchOrDecodeError)),
-    manifest: Option(Result(mcvds_types.Manifest, FetchOrDecodeError)),
+    atdf: Option(Result(t.Atdf, FetchOrDecodeError)),
+    manifest: Option(Result(t.Manifest, FetchOrDecodeError)),
     error: Option(String),
-    device: Option(mcvds_types.Device),
-    pinout: Option(mcvds_types.Pinout),
+    device: Option(t.Device),
+    pinout: Option(t.Pinout),
   )
 }
 
@@ -89,7 +90,7 @@ fn view(model: Model) {
   }
 }
 
-fn main_view(model: Model, manifest: mcvds_types.Manifest) {
+fn main_view(model: Model, manifest: t.Manifest) {
   div([class("flex flex-col h-full")], [
     div([class("flex grow")], [
       div([id("sidebar"), class("w-60 border bg-sky-900")], [text("sidebar")]),
@@ -118,9 +119,9 @@ fn main_view(model: Model, manifest: mcvds_types.Manifest) {
 }
 
 fn view_chip(
-  atdf: Option(Result(mcvds_types.Atdf, FetchOrDecodeError)),
-  device: Option(mcvds_types.Device),
-  pinout: Option(mcvds_types.Pinout),
+  atdf: Option(Result(t.Atdf, FetchOrDecodeError)),
+  device: Option(t.Device),
+  pinout: Option(t.Pinout),
 ) {
   case atdf, device, pinout {
     Some(Error(error)), _, _ -> text(string.inspect(error))
@@ -132,10 +133,10 @@ fn view_chip(
   }
 }
 
-fn row_pin_count(package: mcvds_types.Package) {
+fn row_pin_count(package: t.Package) {
   case package {
-    mcvds_types.SOIC8 -> 4
-    mcvds_types.SOIC14 -> 7
+    t.SOIC8 -> 4
+    t.SOIC14 -> 7
   }
 }
 
@@ -143,7 +144,7 @@ fn to_px(value: Int) {
   int.to_string(value) <> "px"
 }
 
-fn soic_height(pinout: mcvds_types.Pinout) {
+fn soic_height(pinout: t.Pinout) {
   let pin_row_height = 24
   let pin_row_margin = 10
   to_px({
@@ -152,24 +153,21 @@ fn soic_height(pinout: mcvds_types.Pinout) {
   })
 }
 
-fn pins_to_soic_layout(pins: List(mcvds_types.Pin)) {
+fn pins_to_soic_layout(pins: List(t.Pin)) {
   let row_count = list.length(pins) / 2
   case list.split(pins, row_count) {
     #(left, right) -> #(left, right |> list.reverse)
   }
 }
 
-fn signals_to_soic_layout(
-  signals: List(mcvds_types.Signal),
-  left: List(mcvds_types.Pin),
-) {
+fn signals_to_soic_layout(signals: List(t.Signal), left: List(t.Pin)) {
   let left_pads = list.map(left, fn(pin) { pin.pad })
   list.partition(signals, fn(signal) { list.contains(left_pads, signal.pad) })
 }
 
 fn view_pin(
-  pin: mcvds_types.Pin,
-  signals: List(mcvds_types.Signal),
+  pin: t.Pin,
+  signals: List(t.Signal),
   row_class: String,
   pin_rounding: String,
 ) {
@@ -185,7 +183,7 @@ fn view_pin(
   ])
 }
 
-fn view_signals(pin: mcvds_types.Pin, signals: List(mcvds_types.Signal)) {
+fn view_signals(pin: t.Pin, signals: List(t.Signal)) {
   case signals {
     [] -> [do_view_signal(pin.pad, pin.pad)]
     _ -> list.map(signals, view_signal)
@@ -210,7 +208,7 @@ fn do_view_signal(label: String, function: String) {
   )
 }
 
-fn view_signal(signal: mcvds_types.Signal) {
+fn view_signal(signal: t.Signal) {
   do_view_signal(signal_label(signal), signal.function)
 }
 
@@ -218,7 +216,7 @@ fn view_signal(signal: mcvds_types.Signal) {
 /// For IOPORT function the group is PIN, so use the pad 
 ///   name as it is more familiar, eg "PA4"
 /// For OUT group use function name, eg "DAC0 OUT"
-fn signal_label(signal: mcvds_types.Signal) {
+fn signal_label(signal: t.Signal) {
   case signal.function, signal.group {
     "IOPORT", _ -> signal.pad
     _, "OUT" -> signal.function <> " " <> "OUT"
@@ -228,9 +226,7 @@ fn signal_label(signal: mcvds_types.Signal) {
   }
 }
 
-fn group_and_order_signals(
-  signals: List(mcvds_types.Signal),
-) -> List(List(mcvds_types.Signal)) {
+fn group_and_order_signals(signals: List(t.Signal)) -> List(List(t.Signal)) {
   signals
   |> list.group(fn(s) { s.function })
   |> dict.values()
@@ -243,9 +239,7 @@ fn group_and_order_signals(
 /// In the case of ATtiny814, the UPDI and RESET signals are on OTHERS function.
 /// In these situations the signals need to be split into separate signal groups
 /// to avoid blank insertions causing a misalignment
-fn split_duplicate_pads(
-  signal_group: List(mcvds_types.Signal),
-) -> List(List(mcvds_types.Signal)) {
+fn split_duplicate_pads(signal_group: List(t.Signal)) -> List(List(t.Signal)) {
   let #(main_group, other_groups) =
     signal_group
     |> list.group(fn(s) { s.pad })
@@ -262,10 +256,7 @@ fn split_duplicate_pads(
   [main_group |> list.reverse(), ..other_groups |> list.reverse()]
 }
 
-fn fit_signal_group(
-  signal_group: List(mcvds_types.Signal),
-  available_pads: Set(String),
-) {
+fn fit_signal_group(signal_group: List(t.Signal), available_pads: Set(String)) {
   let signal_pads = signal_group |> list.map(fn(s) { s.pad }) |> set.from_list
   case set.is_subset(signal_pads, available_pads) {
     True -> Ok(#(signal_group, set.difference(available_pads, signal_pads)))
@@ -274,7 +265,7 @@ fn fit_signal_group(
 }
 
 fn do_fit_signal_groups(
-  signal_groups: List(List(mcvds_types.Signal)),
+  signal_groups: List(List(t.Signal)),
   pads: Set(String),
   available_pads: Set(String),
 ) {
@@ -314,9 +305,7 @@ fn do_fit_signal_groups(
               [
                 available_pads
                   |> set.to_list
-                  |> list.map(fn(pad) {
-                    mcvds_types.Signal(None, "BLANK", "", None, pad)
-                  }),
+                  |> list.map(fn(pad) { t.Signal(None, "BLANK", "", None, pad) }),
                 ..do_fit_signal_groups(signal_groups, pads, pads)
               ]
             }
@@ -325,19 +314,12 @@ fn do_fit_signal_groups(
   }
 }
 
-fn fit_signal_groups(
-  signal_groups: List(List(mcvds_types.Signal)),
-  pads: Set(String),
-) {
+fn fit_signal_groups(signal_groups: List(List(t.Signal)), pads: Set(String)) {
   do_fit_signal_groups(signal_groups, pads, pads)
 }
 
 /// DIP / SOIC package is dual in-line, so we can render just left and right side
-fn view_soic(
-  atdf: mcvds_types.Atdf,
-  device: mcvds_types.Device,
-  pinout: mcvds_types.Pinout,
-) {
+fn view_soic(atdf: t.Atdf, device: t.Device, pinout: t.Pinout) {
   let #(left_pins, right_pins) = pins_to_soic_layout(pinout.pins)
   let signals =
     device.modules
