@@ -292,20 +292,13 @@ fn do_fit_signal_groups(
               fitted_signal_groups
             }
             // TODO insert blanks
-            False -> {
-              io.println(
-                "Add blanks: "
-                <> int.to_string(set.size(available_pads))
-                <> "-"
-                <> int.to_string(list.length(signal_groups)),
-              )
+            False ->
               do_fit_signal_groups(signal_groups, pads, pads, [
                 available_pads
                   |> set.to_list
                   |> list.map(fn(pad) { t.Signal(None, "BLANK", "", None, pad) }),
                 ..fitted_signal_groups
               ])
-            }
           }
       }
   }

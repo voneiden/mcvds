@@ -12,7 +12,6 @@ import lustre/attribute as a
 fn split_function(function: String) -> #(String, Int, Bool) {
   let assert Ok(re) = regex.from_string("([A-Z_]*)(\\d)?.*?(_ALT)?")
   let matches = regex.scan(re, function)
-  io.debug(matches)
   case matches {
     [match, _] ->
       case match.submatches {
