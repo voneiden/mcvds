@@ -210,7 +210,7 @@ fn do_view_signal(label: String, function: String) {
   div(
     [
       class(
-        "text-xs rounded w-14 flex justify-center items-center mx-1 "
+        "text-xs rounded w-16 flex justify-center items-center mx-1 "
         <> signal_border
         <> signal_bg_color,
       ),
