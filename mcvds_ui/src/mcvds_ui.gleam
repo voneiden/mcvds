@@ -268,29 +268,28 @@ fn do_fit_signal_groups(
   signal_groups: List(List(t.Signal)),
   pads: Set(String),
   available_pads: Set(String),
+  fitted_signal_groups: List(List(t.Signal)),
 ) {
   case signal_groups {
-    [] -> []
+    [] -> fitted_signal_groups
     _ ->
       case list.pop_map(signal_groups, fit_signal_group(_, available_pads)) {
         Ok(#(
           #(fitted_signal_group, available_pads_after_fit),
           remaining_signal_groups,
         )) -> {
-          [
-            fitted_signal_group,
-            ..do_fit_signal_groups(
+          do_fit_signal_groups(
               remaining_signal_groups,
               pads,
               available_pads_after_fit,
+            [fitted_signal_group, ..fitted_signal_groups],
             )
-          ]
         }
         Error(_) ->
           case pads == available_pads {
             True -> {
               io.println_error("Fitting has failed, giving up!")
-              signal_groups
+              fitted_signal_groups
             }
             // TODO insert blanks
             False -> {
@@ -300,14 +299,12 @@ fn do_fit_signal_groups(
                 <> "-"
                 <> int.to_string(list.length(signal_groups)),
               )
-
-              //do_fit_signal_groups(signal_groups, pads, pads)
-              [
+              do_fit_signal_groups(signal_groups, pads, pads, [
                 available_pads
                   |> set.to_list
                   |> list.map(fn(pad) { t.Signal(None, "BLANK", "", None, pad) }),
-                ..do_fit_signal_groups(signal_groups, pads, pads)
-              ]
+                ..fitted_signal_groups
+              ])
             }
           }
       }
@@ -315,7 +312,7 @@ fn do_fit_signal_groups(
 }
 
 fn fit_signal_groups(signal_groups: List(List(t.Signal)), pads: Set(String)) {
-  do_fit_signal_groups(signal_groups, pads, pads)
+  do_fit_signal_groups(signal_groups, pads, pads, []) |> list.reverse
 }
 
 /// DIP / SOIC package is dual in-line, so we can render just left and right side
