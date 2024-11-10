@@ -1,6 +1,6 @@
 //// TODO, implement: transform: translate(50px, 0) scale(0.75);
 
-import gleam/dict
+import gleam/dict.{type Dict}
 import gleam/dynamic
 import gleam/fetch
 import gleam/http/request
@@ -34,6 +34,7 @@ type Model {
     error: Option(String),
     device: Option(t.Device),
     pinout: Option(t.Pinout),
+    signal_map: Dict(String, List(t.Signal)),
   )
 }
 
@@ -51,7 +52,14 @@ pub fn main() {
 
 fn init(_flags) {
   #(
-    Model(atdf: None, manifest: None, error: None, device: None, pinout: None),
+    Model(
+      atdf: None,
+      manifest: None,
+      error: None,
+      device: None,
+      pinout: None,
+      signal_map: dict.new(),
+    ),
     effect.batch([get_manifest(), get_atdf("ATtiny814.json")]),
   )
 }
@@ -69,13 +77,18 @@ fn update(model: Model, msg: Msg) {
     ManifestResponse(manifest) -> Model(..model, manifest: Some(manifest))
     AtdfResponse(atdf_response) ->
       case atdf_response {
-        Ok(atdf) ->
+        Ok(atdf) -> {
+          let device =
+            use_option_if_in_list_else_first(atdf.devices, model.device)
           Model(
             ..model,
             atdf: Some(atdf_response),
-            device: use_option_if_in_list_else_first(atdf.devices, model.device),
+            device: device,
             pinout: use_option_if_in_list_else_first(atdf.pinouts, model.pinout),
+            signal_map: option.map(device, generate_signal_map)
+              |> option.unwrap(dict.new()),
           )
+        }
         Error(_) -> Model(..model, atdf: Some(atdf_response))
       }
   }
@@ -106,7 +119,7 @@ fn main_view(model: Model, manifest: t.Manifest) {
             #("background-size", "10px 10px"),
           ]),
         ],
-        [view_chip(model.atdf, model.device, model.pinout)],
+        [view_chip(model.atdf, model.pinout, model.signal_map)],
       ),
     ]),
     div([class("flex grow")], [
@@ -120,16 +133,14 @@ fn main_view(model: Model, manifest: t.Manifest) {
 
 fn view_chip(
   atdf: Option(Result(t.Atdf, FetchOrDecodeError)),
-  device: Option(t.Device),
-  pinout: Option(t.Pinout),
+    pinout: Option(t.Pinout),
+  signal_map: Dict(String, List(t.Signal)),
 ) {
-  case atdf, device, pinout {
-    Some(Error(error)), _, _ -> text(string.inspect(error))
-    None, _, _ -> text("no chip")
-    _, None, _ -> text("no device")
-    _, _, None -> text("no pinout")
-    Some(Ok(atdf)), Some(device), Some(pinout) ->
-      view_soic(atdf, device, pinout)
+  case atdf, pinout {
+    Some(Error(error)), _ -> text(string.inspect(error))
+    None, _ -> text("no chip")
+    _, None -> text("no pinout")
+    Some(Ok(atdf)), Some(pinout) -> view_soic(atdf, pinout, signal_map)
   }
 }
 
@@ -308,9 +319,7 @@ fn fit_signal_groups(signal_groups: List(List(t.Signal)), pads: Set(String)) {
   do_fit_signal_groups(signal_groups, pads, pads, []) |> list.reverse
 }
 
-/// DIP / SOIC package is dual in-line, so we can render just left and right side
-fn view_soic(atdf: t.Atdf, device: t.Device, pinout: t.Pinout) {
-  let #(left_pins, right_pins) = pins_to_soic_layout(pinout.pins)
+fn generate_signal_map(device: t.Device) {
   let signals =
     device.modules
     |> list.map(fn(m) { m.instances })
@@ -321,12 +330,21 @@ fn view_soic(atdf: t.Atdf, device: t.Device, pinout: t.Pinout) {
   let signal_pads = signals |> list.map(fn(s) { s.pad }) |> set.from_list
 
   // Note: group reverses signal order
-  let signal_map =
+
     signals
     |> group_and_order_signals
     |> fit_signal_groups(signal_pads)
     |> list.concat
     |> list.group(fn(s) { s.pad })
+}
+
+/// DIP / SOIC package is dual in-line, so we can render just left and right side
+fn view_soic(
+  atdf: t.Atdf,
+  pinout: t.Pinout,
+  signal_map: Dict(String, List(t.Signal)),
+) {
+  let #(left_pins, right_pins) = pins_to_soic_layout(pinout.pins)
 
   div(
     [
