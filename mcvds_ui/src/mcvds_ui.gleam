@@ -29,6 +29,8 @@ type Msg {
   HighlightSignal(Option(t.Signal))
   SelectSignal(Option(t.Signal))
   ToggleFilterModule(t.ModuleReference)
+  SetAllFilterModule
+  RemoveAllFilterModule
 }
 
 type Model {
@@ -102,12 +104,8 @@ fn update(model: Model, msg: Msg) {
             atdf: Some(atdf_response),
             device: device,
             pinout: use_option_if_in_list_else_first(atdf.pinouts, model.pinout),
-            signal_map: option.map(device, generate_signal_map(
-                _,
-                model.filter_modules,
-              ))
-              |> option.unwrap(dict.new()),
           )
+          |> update_signal_map
         }
         Error(_) -> Model(..model, atdf: Some(atdf_response))
       }
@@ -115,18 +113,36 @@ fn update(model: Model, msg: Msg) {
     SelectSignal(signal) -> Model(..model, selected_signal: signal)
     ToggleFilterModule(module) -> {
       let filter_modules = set_toggle(model.filter_modules, module)
-      Model(
-        ..model,
-        signal_map: option.map(model.device, generate_signal_map(
-            _,
-            filter_modules,
-          ))
-          |> option.unwrap(dict.new()),
-        filter_modules: filter_modules,
-      )
+      Model(..model, filter_modules: filter_modules)
+      |> update_signal_map
+    }
+    SetAllFilterModule -> {
+      case model.device {
+        Some(device) ->
+          Model(
+            ..model,
+            filter_modules: filterable_modules(device.modules) |> set.from_list,
+          )
+          |> update_signal_map
+        None -> model
+      }
+    }
+    RemoveAllFilterModule -> {
+      Model(..model, filter_modules: set.new()) |> update_signal_map
     }
   }
   #(model, effect.none())
+}
+
+fn update_signal_map(model: Model) -> Model {
+  Model(
+    ..model,
+    signal_map: option.map(model.device, generate_signal_map(
+        _,
+        model.filter_modules,
+      ))
+      |> option.unwrap(dict.new()),
+  )
 }
 
 fn view(model: Model) {
@@ -198,20 +214,32 @@ fn view_sidebar(
   }
 }
 
+fn filterable_modules(modules: List(t.ModuleReference)) {
+  modules
+  |> list.filter(fn(module) {
+    let no_signals =
+      get_signals_for_module_reference(module)
+      |> list.is_empty()
+    !no_signals
+  })
+}
+
 fn view_module_select(
   modules: List(t.ModuleReference),
   filter_modules: Set(t.ModuleReference),
 ) {
-  let modules =
-    modules
-    |> list.filter(fn(module) {
-      let no_signals =
-        get_signals_for_module_reference(module)
-        |> list.is_empty()
-      !no_signals
-    })
+  let modules = filterable_modules(modules)
   html.fieldset([], [
-    html.label([], [text("Hello")]),
+    case set.is_empty(filter_modules) {
+      True ->
+        html.button([a.on("click", fn(_) { Ok(SetAllFilterModule) })], [
+          text("Enable all"),
+        ])
+      False ->
+        html.button([a.on("click", fn(_) { Ok(RemoveAllFilterModule) })], [
+          text("Disable all"),
+        ])
+    },
     ..list.map(modules, fn(module) {
       div([], [
         html.input([
