@@ -270,7 +270,9 @@ fn view_pin(
   div([class("[&:not(:last-child)]:mb-2.5 h-6 flex"), class(row_class)], [
     div(
       [
-        class("flex justify-center items-center text-xs w-6 bg-slate-300"),
+        class(
+          "flex justify-center items-center text-xs w-6 text-black bg-slate-300",
+        ),
         class(pin_rounding),
       ],
       [text(int.to_string(pin.position))],
