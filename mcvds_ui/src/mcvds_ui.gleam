@@ -28,6 +28,7 @@ type Msg {
   AtdfResponse(Result(t.Atdf, FetchOrDecodeError))
   HighlightSignal(Option(t.Signal))
   SelectSignal(Option(t.Signal))
+  ToggleFilterModule(t.ModuleReference)
 }
 
 type Model {
@@ -38,6 +39,7 @@ type Model {
     device: Option(t.Device),
     pinout: Option(t.Pinout),
     signal_map: Dict(String, List(t.Signal)),
+    filter_modules: Set(t.ModuleReference),
     highlighted_signal: Option(t.Signal),
     selected_signal: Option(t.Signal),
   )
@@ -64,6 +66,7 @@ fn init(_flags) {
       device: None,
       pinout: None,
       signal_map: dict.new(),
+      filter_modules: set.new(),
       highlighted_signal: None,
       selected_signal: None,
     ),
@@ -76,6 +79,13 @@ pub fn use_option_if_in_list_else_first(l: List(a), opt: Option(a)) {
   case option.map(opt, list.contains(l, _)) {
     Some(True) -> opt
     _ -> list.first(l) |> option.from_result
+  }
+}
+
+fn set_toggle(set: set.Set(a), value: a) {
+  case set.contains(set, value) {
+    True -> set.delete(set, value)
+    False -> set.insert(set, value)
   }
 }
 
@@ -92,7 +102,10 @@ fn update(model: Model, msg: Msg) {
             atdf: Some(atdf_response),
             device: device,
             pinout: use_option_if_in_list_else_first(atdf.pinouts, model.pinout),
-            signal_map: option.map(device, generate_signal_map)
+            signal_map: option.map(device, generate_signal_map(
+                _,
+                model.filter_modules,
+              ))
               |> option.unwrap(dict.new()),
           )
         }
@@ -100,6 +113,18 @@ fn update(model: Model, msg: Msg) {
       }
     HighlightSignal(signal) -> Model(..model, highlighted_signal: signal)
     SelectSignal(signal) -> Model(..model, selected_signal: signal)
+    ToggleFilterModule(module) -> {
+      let filter_modules = set_toggle(model.filter_modules, module)
+      Model(
+        ..model,
+        signal_map: option.map(model.device, generate_signal_map(
+            _,
+            filter_modules,
+          ))
+          |> option.unwrap(dict.new()),
+        filter_modules: filter_modules,
+      )
+    }
   }
   #(model, effect.none())
 }
@@ -122,7 +147,7 @@ fn main_view(model: Model, manifest: t.Manifest) {
       div([class("flex grow")], [
         div(
           [id("sidebar"), class("w-60 border bg-sky-900")],
-          view_sidebar(model.device),
+          view_sidebar(model.device, model.filter_modules),
         ),
         div(
           [
@@ -160,11 +185,44 @@ fn main_view(model: Model, manifest: t.Manifest) {
   )
 }
 
-fn view_sidebar(device: Option(t.Device)) {
+fn view_sidebar(
+  device: Option(t.Device),
+  filter_modules: Set(t.ModuleReference),
+) {
   case device {
-    Some(device) -> [html.h1([], [text(device.name)])]
+    Some(device) -> [
+      html.h1([], [text(device.name)]),
+      view_module_select(device.modules, filter_modules),
+    ]
     None -> []
   }
+}
+
+fn view_module_select(
+  modules: List(t.ModuleReference),
+  filter_modules: Set(t.ModuleReference),
+) {
+  let modules =
+    modules
+    |> list.filter(fn(module) {
+      let no_signals =
+        get_signals_for_module_reference(module)
+        |> list.is_empty()
+      !no_signals
+    })
+  html.fieldset([], [
+    html.label([], [text("Hello")]),
+    ..list.map(modules, fn(module) {
+      div([], [
+        html.input([
+          a.type_("checkbox"),
+          a.checked(set.contains(filter_modules, module)),
+          a.on("click", fn(_) { Ok(ToggleFilterModule(module)) }),
+        ]),
+        text(module.name),
+      ])
+    })
+  ])
 }
 
 fn view_registry_overview(atdf: Option(Result(t.Atdf, FetchOrDecodeError))) {
@@ -445,16 +503,16 @@ fn fit_signal_groups(signal_groups: List(List(t.Signal)), pads: Set(String)) {
 }
 
 fn get_signals(device: t.Device, filter_modules: Set(t.ModuleReference)) {
-    device.modules
+  device.modules
   |> list.filter(fn(module) { set.contains(filter_modules, module) })
   |> list.map(fn(m) { get_signals_for_module_reference(m) })
-    |> list.concat
+  |> list.concat
 }
 
 fn get_signals_for_module_reference(module_reference: t.ModuleReference) {
   module_reference.instances
-    |> list.map(fn(i) { i.signals })
-    |> list.concat
+  |> list.map(fn(i) { i.signals })
+  |> list.concat
 }
 
 fn generate_signal_map(device: t.Device, filter_modules: Set(t.ModuleReference)) {
