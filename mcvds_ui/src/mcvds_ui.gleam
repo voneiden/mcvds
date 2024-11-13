@@ -113,45 +113,51 @@ fn view(model: Model) {
 }
 
 fn main_view(model: Model, manifest: t.Manifest) {
-  div([class("flex flex-col h-full"), e.on_click(SelectSignal(None))], [
-    div([class("flex grow")], [
-      div(
-        [id("sidebar"), class("w-60 border bg-sky-900")],
-        view_sidebar(model.device),
-      ),
-      div(
-        [
-          id("chip"),
-          class("flex grow bg-sky-950"),
-          a.style([
-            #(
-              "background-image",
-              "radial-gradient(#000000 1px,transparent 1px)",
+  div(
+    [
+      class("flex flex-col h-full text-blue-100"),
+      e.on_click(SelectSignal(None)),
+    ],
+    [
+      div([class("flex grow")], [
+        div(
+          [id("sidebar"), class("w-60 border bg-sky-900")],
+          view_sidebar(model.device),
+        ),
+        div(
+          [
+            id("chip"),
+            class("flex grow bg-sky-950"),
+            a.style([
+              #(
+                "background-image",
+                "radial-gradient(#000000 1px,transparent 1px)",
+              ),
+              #("background-size", "10px 10px"),
+            ]),
+          ],
+          [
+            view_chip(
+              model.atdf,
+              model.pinout,
+              model.signal_map,
+              model.highlighted_signal,
+              model.selected_signal,
             ),
-            #("background-size", "10px 10px"),
-          ]),
-        ],
-        [
-          view_chip(
-            model.atdf,
-            model.pinout,
-            model.signal_map,
-            model.highlighted_signal,
-            model.selected_signal,
-          ),
-        ],
-      ),
-    ]),
-    div([class("flex grow")], [
-      div(
-        [id("registers"), class("grow border bg-sky-900")],
-        view_registry_overview(model.atdf),
-      ),
-      div([id("documentation"), class("grow border bg-sky-900")], [
-        text("doc view"),
+          ],
+        ),
       ]),
-    ]),
-  ])
+      div([class("flex grow")], [
+        div(
+          [id("registers"), class("grow border bg-sky-900")],
+          view_registry_overview(model.atdf),
+        ),
+        div([id("documentation"), class("grow border bg-sky-900")], [
+          text("doc view"),
+        ]),
+      ]),
+    ],
+  )
 }
 
 fn view_sidebar(device: Option(t.Device)) {
@@ -178,7 +184,10 @@ fn view_modules(modules: List(t.Module)) {
 }
 
 fn view_module(module: t.Module) {
-  html.li([], [text(label_module(module))])
+  html.li([], [
+    text(label_module(module)),
+    html.ul([], [view_register_groups(module.register_groups)]),
+  ])
 }
 
 fn label_module(module: t.Module) {
@@ -186,6 +195,29 @@ fn label_module(module: t.Module) {
     True -> module.caption
     False -> module.caption <> " (" <> module.name <> ")"
   }
+}
+
+fn view_register_groups(register_groups: List(t.RegisterGroup)) {
+  html.ul(
+    [class("ml-4")],
+    register_groups
+      |> list.map(fn(register_group) {
+        view_registers(register_group.registers)
+      })
+      |> list.concat(),
+  )
+}
+
+fn view_register_group(register_group: t.RegisterGroup) {
+  html.li([], [text(register_group.name)])
+}
+
+fn view_registers(registers: List(t.Register)) {
+  registers |> list.map(view_register)
+}
+
+fn view_register(register: t.Register) {
+  html.li([], [text(register.name)])
 }
 
 fn view_chip(
