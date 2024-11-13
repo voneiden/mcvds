@@ -14,17 +14,20 @@ import gleam/set.{type Set}
 import gleam/string
 import js/utils
 import lustre
-import lustre/attribute.{class, id} as a
+import lustre/attribute.{class, classes, id} as a
 import lustre/effect
 import lustre/element.{text}
 import lustre/element/html.{div}
+import lustre/event as e
 import mcvds_coders
 import mcvds_types as t
 import utils/signal
 
 type Msg {
-  ManifestResponse(Result(mcvds_types.Manifest, FetchOrDecodeError))
-  AtdfResponse(Result(mcvds_types.Atdf, FetchOrDecodeError))
+  ManifestResponse(Result(t.Manifest, FetchOrDecodeError))
+  AtdfResponse(Result(t.Atdf, FetchOrDecodeError))
+  HighlightSignal(Option(t.Signal))
+  SelectSignal(Option(t.Signal))
 }
 
 type Model {
@@ -35,6 +38,8 @@ type Model {
     device: Option(t.Device),
     pinout: Option(t.Pinout),
     signal_map: Dict(String, List(t.Signal)),
+    highlighted_signal: Option(t.Signal),
+    selected_signal: Option(t.Signal),
   )
 }
 
@@ -59,6 +64,8 @@ fn init(_flags) {
       device: None,
       pinout: None,
       signal_map: dict.new(),
+      highlighted_signal: None,
+      selected_signal: None,
     ),
     effect.batch([get_manifest(), get_atdf("ATtiny814.json")]),
   )
@@ -91,6 +98,8 @@ fn update(model: Model, msg: Msg) {
         }
         Error(_) -> Model(..model, atdf: Some(atdf_response))
       }
+    HighlightSignal(signal) -> Model(..model, highlighted_signal: signal)
+    SelectSignal(signal) -> Model(..model, selected_signal: signal)
   }
   #(model, effect.none())
 }
@@ -104,7 +113,7 @@ fn view(model: Model) {
 }
 
 fn main_view(model: Model, manifest: t.Manifest) {
-  div([class("flex flex-col h-full")], [
+  div([class("flex flex-col h-full"), e.on_click(SelectSignal(None))], [
     div([class("flex grow")], [
       div([id("sidebar"), class("w-60 border bg-sky-900")], [text("sidebar")]),
       div(
@@ -119,7 +128,15 @@ fn main_view(model: Model, manifest: t.Manifest) {
             #("background-size", "10px 10px"),
           ]),
         ],
-        [view_chip(model.atdf, model.pinout, model.signal_map)],
+        [
+          view_chip(
+            model.atdf,
+            model.pinout,
+            model.signal_map,
+            model.highlighted_signal,
+            model.selected_signal,
+          ),
+        ],
       ),
     ]),
     div([class("flex grow")], [
@@ -133,14 +150,17 @@ fn main_view(model: Model, manifest: t.Manifest) {
 
 fn view_chip(
   atdf: Option(Result(t.Atdf, FetchOrDecodeError)),
-    pinout: Option(t.Pinout),
+  pinout: Option(t.Pinout),
   signal_map: Dict(String, List(t.Signal)),
+  highlighted_signal: Option(t.Signal),
+  selected_signal: Option(t.Signal),
 ) {
   case atdf, pinout {
     Some(Error(error)), _ -> text(string.inspect(error))
     None, _ -> text("no chip")
     _, None -> text("no pinout")
-    Some(Ok(atdf)), Some(pinout) -> view_soic(atdf, pinout, signal_map)
+    Some(Ok(atdf)), Some(pinout) ->
+      view_soic(atdf, pinout, signal_map, highlighted_signal, selected_signal)
   }
 }
 
@@ -181,6 +201,8 @@ fn view_pin(
   signals: List(t.Signal),
   row_class: String,
   pin_rounding: String,
+  highlighted_signal: Option(t.Signal),
+  selected_signal: Option(t.Signal),
 ) {
   div([class("[&:not(:last-child)]:mb-2.5 h-6 flex"), class(row_class)], [
     div(
@@ -190,37 +212,75 @@ fn view_pin(
       ],
       [text(int.to_string(pin.position))],
     ),
-    ..view_signals(pin, signals)
+    ..view_signals(signals, pin, highlighted_signal, selected_signal)
   ])
 }
 
-fn view_signals(pin: t.Pin, signals: List(t.Signal)) {
+fn view_signals(
+  signals: List(t.Signal),
+  pin: t.Pin,
+  highlighted_signal: Option(t.Signal),
+  selected_signal: Option(t.Signal),
+) {
+  let view_signal = view_signal(_, highlighted_signal, selected_signal)
   case signals {
-    [] -> [do_view_signal(pin.pad, pin.pad)]
+    [] -> [view_signal(t.Signal(None, pin.pad, pin.pad, None, pin.pad))]
     _ -> list.map(signals, view_signal)
   }
 }
 
-fn do_view_signal(label: String, function: String) {
-  let signal_bg_color = signal.background(function)
+fn highlight_signal(highlighted_signal: Option(t.Signal), signal: t.Signal) {
+  highlighted_signal
+  |> option.map(fn(highlighted_signal) {
+    highlighted_signal.function == signal.function
+  })
+  |> option.unwrap(False)
+}
+
+fn select_signal_classes(selected_signal: Option(t.Signal), signal: t.Signal) {
+  selected_signal
+  |> option.map(fn(selected_signal) {
+    case selected_signal.function == signal.function {
+      True -> #("border-2 border-cyan-500", True)
+      False -> #("opacity-50", True)
+    }
+  })
+  |> option.unwrap(#("", False))
+}
+
+fn view_signal(
+  signal: t.Signal,
+  highlighted_signal: Option(t.Signal),
+  selected_signal: Option(t.Signal),
+) {
+  let label = signal_label(signal)
+  let signal_bg_color = signal.background(signal.function)
   let signal_border = case label {
-    "" -> ""
-    _ -> "border "
+    "" -> #("", False)
+    _ -> #("border", True)
   }
   div(
     [
-      class(
-        "text-xs rounded w-16 flex justify-center items-center mx-1 "
-        <> signal_border
-        <> signal_bg_color,
-      ),
+      // TODO make this cleaner
+      class("text-xs rounded w-16 flex justify-center items-center mx-1"),
+      class(signal_bg_color),
+      classes([
+        signal_border,
+        #(
+          "cursor-pointer border-2 border-cyan-300",
+          highlight_signal(highlighted_signal, signal),
+        ),
+        select_signal_classes(selected_signal, signal),
+      ]),
+      e.on_mouse_enter(HighlightSignal(Some(signal))),
+      e.on_mouse_leave(HighlightSignal(None)),
+      e.on("click", fn(event) {
+        e.stop_propagation(event)
+        Ok(SelectSignal(Some(signal)))
+      }),
     ],
     [text(label)],
   )
-}
-
-fn view_signal(signal: t.Signal) {
-  do_view_signal(signal_label(signal), signal.function)
 }
 
 /// For labeling the signal we normally use group + index
@@ -290,11 +350,11 @@ fn do_fit_signal_groups(
           remaining_signal_groups,
         )) -> {
           do_fit_signal_groups(
-              remaining_signal_groups,
-              pads,
-              available_pads_after_fit,
+            remaining_signal_groups,
+            pads,
+            available_pads_after_fit,
             [fitted_signal_group, ..fitted_signal_groups],
-            )
+          )
         }
         Error(_) ->
           case pads == available_pads {
@@ -331,11 +391,11 @@ fn generate_signal_map(device: t.Device) {
 
   // Note: group reverses signal order
 
-    signals
-    |> group_and_order_signals
-    |> fit_signal_groups(signal_pads)
-    |> list.concat
-    |> list.group(fn(s) { s.pad })
+  signals
+  |> group_and_order_signals
+  |> fit_signal_groups(signal_pads)
+  |> list.concat
+  |> list.group(fn(s) { s.pad })
 }
 
 /// DIP / SOIC package is dual in-line, so we can render just left and right side
@@ -343,6 +403,8 @@ fn view_soic(
   atdf: t.Atdf,
   pinout: t.Pinout,
   signal_map: Dict(String, List(t.Signal)),
+  highlighted_signal: Option(t.Signal),
+  selected_signal: Option(t.Signal),
 ) {
   let #(left_pins, right_pins) = pins_to_soic_layout(pinout.pins)
 
@@ -361,6 +423,8 @@ fn view_soic(
             dict.get(signal_map, pin.pad) |> result.unwrap([]) |> list.reverse,
             "justify-start flex-row-reverse",
             "rounded-l-md",
+            highlighted_signal,
+            selected_signal,
           )
         }),
       ),
@@ -391,6 +455,8 @@ fn view_soic(
             dict.get(signal_map, pin.pad) |> result.unwrap([]) |> list.reverse,
             "justify-start",
             "rounded-r-md",
+            highlighted_signal,
+            selected_signal,
           )
         }),
       ),
