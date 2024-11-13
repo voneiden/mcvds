@@ -208,10 +208,6 @@ fn view_register_groups(register_groups: List(t.RegisterGroup)) {
   )
 }
 
-fn view_register_group(register_group: t.RegisterGroup) {
-  html.li([], [text(register_group.name)])
-}
-
 fn view_registers(registers: List(t.Register)) {
   registers |> list.map(view_register)
 }
@@ -261,11 +257,6 @@ fn pins_to_soic_layout(pins: List(t.Pin)) {
   case list.split(pins, row_count) {
     #(left, right) -> #(left, right |> list.reverse)
   }
-}
-
-fn signals_to_soic_layout(signals: List(t.Signal), left: List(t.Pin)) {
-  let left_pads = list.map(left, fn(pin) { pin.pad })
-  list.partition(signals, fn(signal) { list.contains(left_pads, signal.pad) })
 }
 
 fn view_pin(
