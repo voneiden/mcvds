@@ -115,7 +115,10 @@ fn view(model: Model) {
 fn main_view(model: Model, manifest: t.Manifest) {
   div([class("flex flex-col h-full"), e.on_click(SelectSignal(None))], [
     div([class("flex grow")], [
-      div([id("sidebar"), class("w-60 border bg-sky-900")], [text("sidebar")]),
+      div(
+        [id("sidebar"), class("w-60 border bg-sky-900")],
+        view_sidebar(model.device),
+      ),
       div(
         [
           id("chip"),
@@ -140,12 +143,49 @@ fn main_view(model: Model, manifest: t.Manifest) {
       ),
     ]),
     div([class("flex grow")], [
-      div([id("registers"), class("grow border bg-sky-900")], [text("reg view")]),
+      div(
+        [id("registers"), class("grow border bg-sky-900")],
+        view_registry_overview(model.atdf),
+      ),
       div([id("documentation"), class("grow border bg-sky-900")], [
         text("doc view"),
       ]),
     ]),
   ])
+}
+
+fn view_sidebar(device: Option(t.Device)) {
+  case device {
+    Some(device) -> [html.h1([], [text(device.name)])]
+    None -> []
+  }
+}
+
+fn view_registry_overview(atdf: Option(Result(t.Atdf, FetchOrDecodeError))) {
+  case atdf {
+    Some(Ok(atdf)) -> [view_modules(atdf.modules)]
+    _ -> [text("mjea")]
+  }
+}
+
+fn view_modules(modules: List(t.Module)) {
+  html.ul(
+    [],
+    modules
+      |> list.sort(fn(m1, m2) { string.compare(m1.name, m2.name) })
+      |> list.map(view_module),
+  )
+}
+
+fn view_module(module: t.Module) {
+  html.li([], [text(label_module(module))])
+}
+
+fn label_module(module: t.Module) {
+  case module.caption == module.name {
+    True -> module.caption
+    False -> module.caption <> " (" <> module.name <> ")"
+  }
 }
 
 fn view_chip(
