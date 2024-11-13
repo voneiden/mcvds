@@ -442,13 +442,21 @@ fn fit_signal_groups(signal_groups: List(List(t.Signal)), pads: Set(String)) {
   do_fit_signal_groups(signal_groups, pads, pads, []) |> list.reverse
 }
 
-fn generate_signal_map(device: t.Device) {
-  let signals =
+fn get_signals(device: t.Device, filter_modules: Set(t.ModuleReference)) {
     device.modules
-    |> list.map(fn(m) { m.instances })
+  |> list.filter(fn(module) { set.contains(filter_modules, module) })
+  |> list.map(fn(m) { get_signals_for_module_reference(m) })
     |> list.concat
+}
+
+fn get_signals_for_module_reference(module_reference: t.ModuleReference) {
+  module_reference.instances
     |> list.map(fn(i) { i.signals })
     |> list.concat
+}
+
+fn generate_signal_map(device: t.Device, filter_modules: Set(t.ModuleReference)) {
+  let signals = get_signals(device, filter_modules)
 
   let signal_pads = signals |> list.map(fn(s) { s.pad }) |> set.from_list
 
