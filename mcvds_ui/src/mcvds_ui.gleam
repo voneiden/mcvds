@@ -404,34 +404,39 @@ fn view_signal(
   highlighted_signal: Option(t.Signal),
   selected_signal: Option(t.Signal),
 ) {
-  let label = signal_label(signal)
-  let signal_bg_color = signal.background(signal.function)
-  let signal_border = case label {
-    "" -> #("", False)
-    _ -> #("border", True)
+  case signal.function {
+    "BLANK" -> div([class("w-16 mx-1")], [])
+    _ -> {
+      let label = signal_label(signal)
+      let function_attributes = signal.attributes(signal.function)
+      let signal_border = case label {
+        "" -> #("", False)
+        _ -> #("border", True)
+      }
+      div(
+        [
+          // TODO make this cleaner
+          class("text-xs rounded w-16 flex justify-center items-center mx-1"),
+          classes([
+            signal_border,
+            #(
+              "cursor-pointer border-2 border-cyan-300",
+              highlight_signal(highlighted_signal, signal),
+            ),
+            select_signal_classes(selected_signal, signal),
+          ]),
+          e.on_mouse_enter(HighlightSignal(Some(signal))),
+          e.on_mouse_leave(HighlightSignal(None)),
+          e.on("click", fn(event) {
+            e.stop_propagation(event)
+            Ok(SelectSignal(Some(signal)))
+          }),
+          ..function_attributes
+        ],
+        [text(label)],
+      )
+    }
   }
-  div(
-    [
-      // TODO make this cleaner
-      class("text-xs rounded w-16 flex justify-center items-center mx-1"),
-      class(signal_bg_color),
-      classes([
-        signal_border,
-        #(
-          "cursor-pointer border-2 border-cyan-300",
-          highlight_signal(highlighted_signal, signal),
-        ),
-        select_signal_classes(selected_signal, signal),
-      ]),
-      e.on_mouse_enter(HighlightSignal(Some(signal))),
-      e.on_mouse_leave(HighlightSignal(None)),
-      e.on("click", fn(event) {
-        e.stop_propagation(event)
-        Ok(SelectSignal(Some(signal)))
-      }),
-    ],
-    [text(label)],
-  )
 }
 
 /// For labeling the signal we normally use group + index
