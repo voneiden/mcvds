@@ -3,3 +3,6 @@
 /build
 erl_crash.dump
 priv
+prelude.mjs
+prelude.d.mts
+src/gleam.mjs
