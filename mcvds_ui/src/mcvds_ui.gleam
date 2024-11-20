@@ -24,7 +24,7 @@ import mcvds_coders
 import mcvds_types as t
 import utils/signal
 
-const storage_key_filter_modules = "filter_modules"
+const storage_key_filter_module_ids = "filter_modules"
 
 type Msg {
   ManifestResponse(Result(t.Manifest, FetchOrDecodeError))
@@ -44,27 +44,27 @@ type Model {
     device: Option(t.Device),
     pinout: Option(t.Pinout),
     signal_map: Dict(String, List(t.Signal)),
-    filter_modules: Set(t.ModuleReference),
+    filter_module_ids: Set(String),
     highlighted_signal: Option(t.Signal),
     selected_signal: Option(t.Signal),
   )
 }
 
-fn save_filter_modules(model: Model) {
-  model.filter_modules
+fn save_filter_module_ids(model: Model) {
+  model.filter_module_ids
   |> set.to_list
-  |> json.array(mcvds_coders.module_reference_encoder)
+  |> json.array(json.string)
   |> json.to_string
-  |> utils.local_storage_set_item(storage_key_filter_modules, _)
+  |> utils.local_storage_set_item(storage_key_filter_module_ids, _)
 
   model
 }
 
-fn load_filter_modules() {
-  case utils.local_storage_get_item(storage_key_filter_modules) {
+fn load_filter_module_ids() {
+  case utils.local_storage_get_item(storage_key_filter_module_ids) {
     Ok(data) -> {
       data
-      |> json.decode(dynamic.list(mcvds_coders.module_reference_decoder()))
+      |> json.decode(dynamic.list(dynamic.string))
       |> result.unwrap([])
       |> set.from_list
     }
@@ -93,7 +93,7 @@ fn init(_flags) {
       device: None,
       pinout: None,
       signal_map: dict.new(),
-      filter_modules: load_filter_modules(),
+      filter_module_ids: load_filter_module_ids(),
       highlighted_signal: None,
       selected_signal: None,
     ),
@@ -137,27 +137,29 @@ fn update(model: Model, msg: Msg) {
     HighlightSignal(signal) -> Model(..model, highlighted_signal: signal)
     SelectSignal(signal) -> Model(..model, selected_signal: signal)
     ToggleFilterModule(module) -> {
-      let filter_modules = set_toggle(model.filter_modules, module)
-      Model(..model, filter_modules: filter_modules)
+      let filter_module_ids = set_toggle(model.filter_module_ids, module.id)
+      Model(..model, filter_module_ids: filter_module_ids)
       |> update_signal_map
-      |> save_filter_modules
+      |> save_filter_module_ids
     }
     SetAllFilterModule -> {
       case model.device {
         Some(device) ->
           Model(
             ..model,
-            filter_modules: filterable_modules(device.modules) |> set.from_list,
+            filter_module_ids: filterable_modules(device.modules)
+              |> list.map(fn(m) { m.id })
+              |> set.from_list,
           )
           |> update_signal_map
-          |> save_filter_modules
+          |> save_filter_module_ids
         None -> model
       }
     }
     RemoveAllFilterModule -> {
-      Model(..model, filter_modules: set.new())
+      Model(..model, filter_module_ids: set.new())
       |> update_signal_map
-      |> save_filter_modules
+      |> save_filter_module_ids
     }
   }
   #(model, effect.none())
@@ -168,7 +170,7 @@ fn update_signal_map(model: Model) -> Model {
     ..model,
     signal_map: option.map(model.device, generate_signal_map(
         _,
-        model.filter_modules,
+        model.filter_module_ids,
       ))
       |> option.unwrap(dict.new()),
   )
@@ -192,7 +194,7 @@ fn main_view(model: Model, manifest: t.Manifest) {
       div([class("flex grow")], [
         div(
           [id("sidebar"), class("w-60 border bg-sky-900")],
-          view_sidebar(model.device, model.filter_modules),
+          view_sidebar(model.device, model.filter_module_ids),
         ),
         div(
           [
@@ -230,14 +232,11 @@ fn main_view(model: Model, manifest: t.Manifest) {
   )
 }
 
-fn view_sidebar(
-  device: Option(t.Device),
-  filter_modules: Set(t.ModuleReference),
-) {
+fn view_sidebar(device: Option(t.Device), filter_module_ids: Set(String)) {
   case device {
     Some(device) -> [
       html.h1([], [text(device.name)]),
-      view_module_select(device.modules, filter_modules),
+      view_module_select(device.modules, filter_module_ids),
     ]
     None -> []
   }
@@ -255,11 +254,11 @@ fn filterable_modules(modules: List(t.ModuleReference)) {
 
 fn view_module_select(
   modules: List(t.ModuleReference),
-  filter_modules: Set(t.ModuleReference),
+  filter_module_ids: Set(String),
 ) {
   let modules = filterable_modules(modules)
   html.fieldset([], [
-    case set.is_empty(filter_modules) {
+    case set.is_empty(filter_module_ids) {
       True ->
         html.button([a.on("click", fn(_) { Ok(SetAllFilterModule) })], [
           text("Enable all"),
@@ -273,7 +272,7 @@ fn view_module_select(
       div([], [
         html.input([
           a.type_("checkbox"),
-          a.checked(set.contains(filter_modules, module)),
+          a.checked(set.contains(filter_module_ids, module.id)),
           a.on("click", fn(_) { Ok(ToggleFilterModule(module)) }),
         ]),
         text(module.name),
@@ -564,9 +563,9 @@ fn fit_signal_groups(signal_groups: List(List(t.Signal)), pads: Set(String)) {
   do_fit_signal_groups(signal_groups, pads, pads, []) |> list.reverse
 }
 
-fn get_signals(device: t.Device, filter_modules: Set(t.ModuleReference)) {
+fn get_signals(device: t.Device, filter_module_ids: Set(String)) {
   device.modules
-  |> list.filter(fn(module) { set.contains(filter_modules, module) })
+  |> list.filter(fn(module) { set.contains(filter_module_ids, module.id) })
   |> list.map(fn(m) { get_signals_for_module_reference(m) })
   |> list.concat
 }
@@ -577,8 +576,8 @@ fn get_signals_for_module_reference(module_reference: t.ModuleReference) {
   |> list.concat
 }
 
-fn generate_signal_map(device: t.Device, filter_modules: Set(t.ModuleReference)) {
-  let signals = get_signals(device, filter_modules)
+fn generate_signal_map(device: t.Device, filter_module_ids: Set(String)) {
+  let signals = get_signals(device, filter_module_ids)
 
   let signal_pads = signals |> list.map(fn(s) { s.pad }) |> set.from_list
 
