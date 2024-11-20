@@ -7,6 +7,7 @@ import gleam/http/request
 import gleam/int
 import gleam/io
 import gleam/javascript/promise
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -22,6 +23,8 @@ import lustre/event as e
 import mcvds_coders
 import mcvds_types as t
 import utils/signal
+
+const storage_key_filter_modules = "filter_modules"
 
 type Msg {
   ManifestResponse(Result(t.Manifest, FetchOrDecodeError))
@@ -47,6 +50,28 @@ type Model {
   )
 }
 
+fn save_filter_modules(model: Model) {
+  model.filter_modules
+  |> set.to_list
+  |> json.array(mcvds_coders.module_reference_encoder)
+  |> json.to_string
+  |> utils.local_storage_set_item(storage_key_filter_modules, _)
+
+  model
+}
+
+fn load_filter_modules() {
+  case utils.local_storage_get_item(storage_key_filter_modules) {
+    Ok(data) -> {
+      data
+      |> json.decode(dynamic.list(mcvds_coders.module_reference_decoder()))
+      |> result.unwrap([])
+      |> set.from_list
+    }
+    _ -> set.new()
+  }
+}
+
 type FetchOrDecodeError {
   FetchError(fetch.FetchError)
   DecodeErrors(dynamic.DecodeErrors)
@@ -68,7 +93,7 @@ fn init(_flags) {
       device: None,
       pinout: None,
       signal_map: dict.new(),
-      filter_modules: set.new(),
+      filter_modules: load_filter_modules(),
       highlighted_signal: None,
       selected_signal: None,
     ),
@@ -115,6 +140,7 @@ fn update(model: Model, msg: Msg) {
       let filter_modules = set_toggle(model.filter_modules, module)
       Model(..model, filter_modules: filter_modules)
       |> update_signal_map
+      |> save_filter_modules
     }
     SetAllFilterModule -> {
       case model.device {
@@ -124,11 +150,14 @@ fn update(model: Model, msg: Msg) {
             filter_modules: filterable_modules(device.modules) |> set.from_list,
           )
           |> update_signal_map
+          |> save_filter_modules
         None -> model
       }
     }
     RemoveAllFilterModule -> {
-      Model(..model, filter_modules: set.new()) |> update_signal_map
+      Model(..model, filter_modules: set.new())
+      |> update_signal_map
+      |> save_filter_modules
     }
   }
   #(model, effect.none())
