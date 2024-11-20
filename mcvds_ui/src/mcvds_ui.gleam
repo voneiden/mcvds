@@ -34,6 +34,7 @@ type Msg {
   ToggleFilterModule(t.ModuleReference)
   SetAllFilterModule
   RemoveAllFilterModule
+  SelectModule(Option(String))
 }
 
 type Model {
@@ -47,6 +48,7 @@ type Model {
     filter_module_ids: Set(String),
     highlighted_signal: Option(t.Signal),
     selected_signal: Option(t.Signal),
+    selected_module_id: Option(String),
   )
 }
 
@@ -96,6 +98,7 @@ fn init(_flags) {
       filter_module_ids: load_filter_module_ids(),
       highlighted_signal: None,
       selected_signal: None,
+      selected_module_id: None,
     ),
     effect.batch([get_manifest(), get_atdf("ATtiny814.json")]),
   )
@@ -161,6 +164,9 @@ fn update(model: Model, msg: Msg) {
       |> update_signal_map
       |> save_filter_module_ids
     }
+    SelectModule(module_id) -> {
+      Model(..model, selected_module_id: module_id)
+    }
   }
   #(model, effect.none())
 }
@@ -222,14 +228,27 @@ fn main_view(model: Model, manifest: t.Manifest) {
       div([class("flex grow")], [
         div(
           [id("registers"), class("grow border bg-sky-900")],
-          view_registry_overview(model.atdf),
+          view_registry_overview(model.atdf, model.selected_module_id),
         ),
-        div([id("documentation"), class("grow border bg-sky-900")], [
-          text("doc view"),
-        ]),
+        div(
+          [id("documentation"), class("grow border bg-sky-900")],
+          view_documentation(
+            model.atdf,
+            model.selected_module_id,
+            model.selected_signal,
+          ),
+        ),
       ]),
     ],
   )
+}
+
+fn view_documentation(
+  atdf: Option(Result(t.Atdf, _)),
+  selected_module_id: Option(String),
+  selected_signal: Option(t.Signal),
+) {
+  [text("doc view")]
 }
 
 fn view_sidebar(device: Option(t.Device), filter_module_ids: Set(String)) {
@@ -281,27 +300,39 @@ fn view_module_select(
   ])
 }
 
-fn view_registry_overview(atdf: Option(Result(t.Atdf, FetchOrDecodeError))) {
+fn view_registry_overview(
+  atdf: Option(Result(t.Atdf, FetchOrDecodeError)),
+  selected_module_id: Option(String),
+) {
   case atdf {
-    Some(Ok(atdf)) -> [view_modules(atdf.modules)]
+    Some(Ok(atdf)) -> [view_modules(atdf.modules, selected_module_id)]
     _ -> [text("mjea")]
   }
 }
 
-fn view_modules(modules: List(t.Module)) {
+fn view_modules(modules: List(t.Module), selected_module_id: Option(String)) {
   html.ul(
     [],
     modules
       |> list.sort(fn(m1, m2) { string.compare(m1.name, m2.name) })
-      |> list.map(view_module),
+      |> list.map(view_module(_, selected_module_id)),
   )
 }
 
-fn view_module(module: t.Module) {
-  html.li([], [
-    text(label_module(module)),
-    html.ul([], [view_register_groups(module.register_groups)]),
-  ])
+fn view_module(module: t.Module, selected_module_id: Option(String)) {
+  case selected_module_id {
+    Some(selected_module_id) if selected_module_id == module.id ->
+      html.li([], [
+        text(label_module(module)),
+        html.ul([], [view_register_groups(module.register_groups)]),
+      ])
+    _ ->
+      html.li([], [
+        html.a([e.on_click(SelectModule(Some(module.id)))], [
+          text(label_module(module)),
+        ]),
+      ])
+  }
 }
 
 fn label_module(module: t.Module) {
